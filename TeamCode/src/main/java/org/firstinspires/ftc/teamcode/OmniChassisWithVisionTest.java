@@ -96,7 +96,7 @@ public class OmniChassisWithVisionTest extends LinearOpMode {
 
             // Read sticks
             double drive  = -gamepad1.left_stick_y;        // forward = +
-            double strafe = -gamepad1.left_stick_x;        // right? depends on your preference; kept from your code
+            double strafe = -gamepad1.left_stick_x;        // right? depends on your preference;
             double turn   = -gamepad1.right_stick_x / 2.0; // slow turning
 
             // Drive robot
