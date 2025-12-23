@@ -7,19 +7,7 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
 
-/**
- * Minimal OmniChassis using ONLY:
- *  - 4 drive motors
- *  - goBILDA Pinpoint Odometry Computer on I2C (device name: "odometry")
- *
- * Adds:
- *  1) Pose2d class
- *  2) PinpointIO.getPose() (currently MOCK integration so it works immediately)
- *  3) Constant telemetry update showing robot "location" on Driver Hub
- *
- * NOTE: Once you install/confirm the actual Pinpoint driver class + methods,
- * replace the MOCK in PinpointIO.update/getPose with real readings.
- */
+
 @TeleOp(name="OmniChassisWithVisionTest", group="Test")
 public class OmniChassisWithVisionTest extends LinearOpMode {
 
@@ -28,6 +16,11 @@ public class OmniChassisWithVisionTest extends LinearOpMode {
     private DcMotor rightFrontDrive;
     private DcMotor leftBackDrive;
     private DcMotor rightBackDrive;
+    private DcMotor TurretRotation;
+
+    private DcMotor leftFlyWheel;
+    private DcMotor rightFlyWheel;
+
 
     // Pinpoint odometry computer (I2C) device name: "odometry"
     private PinpointIO pinpoint;
@@ -55,19 +48,29 @@ public class OmniChassisWithVisionTest extends LinearOpMode {
         rightFrontDrive = hardwareMap.get(DcMotor.class, "frontRightMotor");
         leftBackDrive   = hardwareMap.get(DcMotor.class, "backLeftMotor");
         rightBackDrive  = hardwareMap.get(DcMotor.class, "backRightMotor");
+        leftFlyWheel = hardwareMap.get(DcMotor.class, "lflywheel");
+        rightFlyWheel = hardwareMap.get(DcMotor.class, "rflywheel");
+        TurretRotation = hardwareMap.get(DcMotor.class, "turretturn");
+
+
 
         leftFrontDrive.setDirection(DcMotor.Direction.REVERSE);
         leftBackDrive.setDirection(DcMotor.Direction.REVERSE);
         rightFrontDrive.setDirection(DcMotor.Direction.FORWARD);
         rightBackDrive.setDirection(DcMotor.Direction.FORWARD);
+        rightFlyWheel.setDirection(DcMotor.Direction.REVERSE);
 
         rightFrontDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         leftFrontDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         leftBackDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         rightBackDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        leftFlyWheel.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        rightFlyWheel.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        TurretRotation.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
-        // ---- Pinpoint (still MOCK inside PinpointIO) ----
-        pinpoint = new PinpointIO(hardwareMap, telemetry, "odometry");
+
+
+        pinpoint = new PinpointIO(hardwareMap, telemetry, "odo");
         pinpoint.initializeAndConfigure();
 
         telemetry.addLine("Ready: 4 motors + Pinpoint (telemetry enabled)");
@@ -76,6 +79,20 @@ public class OmniChassisWithVisionTest extends LinearOpMode {
         waitForStart();
 
         while (opModeIsActive()) {
+            boolean Rightr1Held = gamepad1.right_bumper;
+            boolean Leftr1Held = gamepad1.left_bumper;
+            if (Rightr1Held) {TurretRotation.setPower(1);}
+            else if (Leftr1Held) {TurretRotation.setPower(-1);}
+            else {TurretRotation.setPower(0);}
+
+            boolean r2Held = gamepad1.right_trigger > 0.1;
+            if (r2Held) {
+                leftFlyWheel.setPower(1);
+                rightFlyWheel.setPower(1);
+            } else {
+                leftFlyWheel.setPower(0);
+                rightFlyWheel.setPower(0);
+            }
 
             // Read sticks
             double drive  = -gamepad1.left_stick_y;        // forward = +
@@ -93,6 +110,9 @@ public class OmniChassisWithVisionTest extends LinearOpMode {
             telemetry.addData("POSE X (in)", "%.2f", pose.xInches);
             telemetry.addData("POSE Y (in)", "%.2f", pose.yInches);
             telemetry.addData("HEADING (deg)", "%.1f", pose.headingDeg);
+            telemetry.addData("r2", gamepad1.right_trigger);
+            telemetry.addData("lflywheel power", leftFlyWheel.getPower());
+            telemetry.addData("rflywheel power", rightFlyWheel.getPower());
 
             telemetry.addData("Drive", "%.2f", drive);
             telemetry.addData("Strafe", "%.2f", strafe);
@@ -135,15 +155,7 @@ public class OmniChassisWithVisionTest extends LinearOpMode {
         rightBackDrive.setPower(rightBackPower);
     }
 
-    /**
-     * Pinpoint wrapper.
-     *
-     * Right now it uses a MOCK "dead reckoning" integrator so:
-     *  - telemetry changes while you drive
-     *  - you confirm everything is wired & OpMode runs
-     *
-     * Replace the mock with your actual goBILDA Pinpoint Java driver calls later.
-     */
+
     private static class PinpointIO {
         private final Telemetry telemetry;
         private final Object driver;
@@ -166,11 +178,6 @@ public class OmniChassisWithVisionTest extends LinearOpMode {
             telemetry.update();
         }
 
-        /**
-         * MOCK update:
-         * - integrates joystick commands into a fake pose, just for visible telemetry.
-         * - Not real odometry.
-         */
         void update(double drive, double strafe, double turn) {
             // Scale factors chosen to look reasonable on screen; tweak if you like.
             mockXIn += strafe * 0.15;       // inches per loop-ish
