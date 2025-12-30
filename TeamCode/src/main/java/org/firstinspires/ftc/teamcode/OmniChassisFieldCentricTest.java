@@ -39,7 +39,7 @@ public class OmniChassisFieldCentricTest extends LinearOpMode {
         // The Pinpoint API requires a DistanceUnit as the third argument.
         // xOffset: distance sideways from center to X (forward) pod.
         // yOffset: distance forward from center to Y (strafe) pod.
-        odo.setOffsets(-15.875, -101.6, DistanceUnit.MM);
+        odo.setOffsets(2.25, 0.0, DistanceUnit.INCH);
 
         odo.setEncoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
         odo.setEncoderDirections(
