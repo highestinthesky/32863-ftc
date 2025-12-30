@@ -5,6 +5,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.CRServo;
 
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
@@ -18,19 +19,11 @@ public class OmniChassisWithVisionTest extends LinearOpMode {
     private DcMotor leftBackDrive;
     private DcMotor rightBackDrive;
 
-    // Other motors
-    private DcMotor TurretRotation;
-    private DcMotor leftFlyWheel;
-    private DcMotor rightFlyWheel;
-    private PinpointIO pinpoint;
-    private DcMotor intake;
-    private Servo spindexer;
-    private Servo tservo;
-    private Servo lspindexup;
-    private Servo rspindexup;
-
     // Optional ramp limiter state
     private static double prevMax = 0.275;
+    private static final double START_POS = 0.2;
+    private static final double INDEX_UP_POS = 0.8;
+
 
     @Override
     public void runOpMode() throws InterruptedException {
@@ -40,16 +33,17 @@ public class OmniChassisWithVisionTest extends LinearOpMode {
         rightFrontDrive = hardwareMap.get(DcMotor.class, "frontRightMotor");
         leftBackDrive   = hardwareMap.get(DcMotor.class, "backLeftMotor");
         rightBackDrive  = hardwareMap.get(DcMotor.class, "backRightMotor");
-        intake = hardwareMap.get(DcMotor.class, "intake");
+        DcMotor intake = hardwareMap.get(DcMotor.class, "intake");
 
-        leftFlyWheel = hardwareMap.get(DcMotor.class, "lflywheel");
-        rightFlyWheel = hardwareMap.get(DcMotor.class, "rflywheel");
-        spindexer = hardwareMap.get(Servo.class, "spindexer");
-        tservo = hardwareMap.get(Servo.class, "tservo");
-        lspindexup = hardwareMap.get(Servo.class, "lspindexup");
-        rspindexup = hardwareMap.get(Servo.class, "rspindexup");
+        DcMotor leftFlyWheel = hardwareMap.get(DcMotor.class, "lflywheel");
+        DcMotor rightFlyWheel = hardwareMap.get(DcMotor.class, "rflywheel");
+        CRServo spindexer = hardwareMap.get(CRServo.class, "spindexer");
+        Servo tservo = hardwareMap.get(Servo.class, "tservo");
+        Servo lspindexerup = hardwareMap.get(Servo.class, "lspindexerup");
+        Servo rspindexerup = hardwareMap.get(Servo.class, "rspindexerup");
 
-        TurretRotation = hardwareMap.get(DcMotor.class, "turretturn"); // need to configure
+        // Other motors
+        DcMotor turretRotation = hardwareMap.get(DcMotor.class, "turretturn"); // need to configure
 
         // ---- Directions ----
         leftFrontDrive.setDirection(DcMotor.Direction.REVERSE);
@@ -69,26 +63,43 @@ public class OmniChassisWithVisionTest extends LinearOpMode {
 
         leftFlyWheel.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         rightFlyWheel.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        TurretRotation.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        turretRotation.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         intake.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
         // ---- Pinpoint (placeholder – does nothing unless you add real driver code) ----
-        pinpoint = new PinpointIO(hardwareMap, telemetry, "odo");
+        PinpointIO pinpoint = new PinpointIO(hardwareMap, telemetry, "odo");
         pinpoint.initializeAndConfigure();
 
         telemetry.addLine("Ready: Drive + Turret + Flywheels");
         telemetry.update();
 
+        lspindexerup.setPosition(START_POS);
+        rspindexerup.setPosition(START_POS);
+        lspindexerup.scaleRange(0.0, 1.0);
+        rspindexerup.scaleRange(0.0, 1.0);
+
         waitForStart();
 
         while (opModeIsActive()) {
             // Turret control (bumpers)
-            if (gamepad2.right_bumper) {
-                TurretRotation.setPower(1);
-            } else if (gamepad2.left_bumper) {
-                TurretRotation.setPower(-1);
+
+            if (gamepad2.y) {
+                lspindexerup.setPosition(INDEX_UP_POS);
+                rspindexerup.setPosition(INDEX_UP_POS);
+            }else {
+                lspindexerup.setPosition(START_POS);
+                rspindexerup.setPosition(START_POS);
+            }
+            if (gamepad2.x) {
+                spindexer.setPower(1);
             } else {
-                TurretRotation.setPower(0);
+                spindexer.setPower(0);
+            } if (gamepad2.right_bumper) {
+                turretRotation.setPower(1);
+            } else if (gamepad2.left_bumper) {
+                turretRotation.setPower(-1);
+            } else {
+                turretRotation.setPower(0);
             }
             // Flywheel control (right trigger)
             if (gamepad2.right_trigger > 0.1) {
@@ -98,7 +109,6 @@ public class OmniChassisWithVisionTest extends LinearOpMode {
                 leftFlyWheel.setPower(0);
                 rightFlyWheel.setPower(0);
             }
-
             // Intake Control (left trigger)
             if (gamepad2.left_trigger > 0.1) {
                 intake.setPower(1);
