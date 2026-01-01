@@ -382,6 +382,11 @@ class ForwardVelocityTuner extends OpMode {
 
 
         if (!end) {
+
+            telemetry.addData("Current Pose", follower.getPose().getX());
+            telemetry.addData("Current Velocity", follower.getVelocity().getXComponent());
+            telemetry.update();
+
             if (Math.abs(follower.getPose().getX()) > (DISTANCE + 72)) {
                 end = true;
                 stopRobot();

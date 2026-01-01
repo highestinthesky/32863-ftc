@@ -11,8 +11,8 @@ import com.qualcomm.robotcore.hardware.CRServo;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
 
-@TeleOp(name="OmniChassisWithVisionTest", group="Test")
-public class OmniChassisWithVisionTest extends OpMode {
+@TeleOp(name="MecanumTeleOpRunVer", group="Test")
+public class MecanumTeleOpRunVer extends OpMode {
 
     // Drive motors
     private DcMotor leftFrontDrive;
