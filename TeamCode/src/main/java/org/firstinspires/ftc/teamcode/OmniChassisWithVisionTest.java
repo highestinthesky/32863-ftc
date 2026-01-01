@@ -92,9 +92,6 @@ public class OmniChassisWithVisionTest extends OpMode {
         pinpoint = new PinpointIO(hardwareMap, telemetry, "odo");
         pinpoint.initializeAndConfigure();
 
-        // Reset ramp limiter when init runs
-        prevMax = 0.275;
-
         telemetry.addLine("Initialized. Press PLAY.");
         telemetry.update();
     }
