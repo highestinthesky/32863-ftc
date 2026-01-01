@@ -1,17 +1,18 @@
 package org.firstinspires.ftc.teamcode;
 
-import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
+import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.hardware.CRServo;
-
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
 
 @TeleOp(name="OmniChassisWithVisionTest", group="Test")
-public class OmniChassisWithVisionTest extends LinearOpMode {
+public class OmniChassisWithVisionTest extends OpMode {
 
     // Drive motors
     private DcMotor leftFrontDrive;
@@ -19,31 +20,47 @@ public class OmniChassisWithVisionTest extends LinearOpMode {
     private DcMotor leftBackDrive;
     private DcMotor rightBackDrive;
 
+    // Other motors/servos
+    private DcMotor intake;
+    private DcMotorEx leftFlyWheel;
+    private DcMotorEx rightFlyWheel;
+    private DcMotor turretRotation;
+
+    private CRServo spindexer;
+    private Servo tservo;
+    private CRServo lspindexerup;
+    private CRServo rspindexerup;
+
     // Optional ramp limiter state
     private static double prevMax = 0.275;
-    private static final double START_POS = 0.2;
-    private static final double INDEX_UP_POS = 0.8;
+    public double highVelocity = 6000;
+    public double lowVelocity = 1500;
+    double curTargetVelocity = highVelocity;
+    double F = 0;
+    double P = 0;
+    double[] stepSizes = {10.0, 1.0, 0.1, 0.001, 0.001};
+    int stepIndex = 1;
 
+    // Pinpoint placeholder
+    private PinpointIO pinpoint;
 
     @Override
-    public void runOpMode() throws InterruptedException {
-
+    public void init() {
         // ---- Motors ----
         leftFrontDrive  = hardwareMap.get(DcMotor.class, "frontLeftMotor");
         rightFrontDrive = hardwareMap.get(DcMotor.class, "frontRightMotor");
         leftBackDrive   = hardwareMap.get(DcMotor.class, "backLeftMotor");
         rightBackDrive  = hardwareMap.get(DcMotor.class, "backRightMotor");
-        DcMotor intake = hardwareMap.get(DcMotor.class, "intake");
 
-        DcMotor leftFlyWheel = hardwareMap.get(DcMotor.class, "lflywheel");
-        DcMotor rightFlyWheel = hardwareMap.get(DcMotor.class, "rflywheel");
-        CRServo spindexer = hardwareMap.get(CRServo.class, "spindexer");
-        Servo tservo = hardwareMap.get(Servo.class, "tservo");
-        Servo lspindexerup = hardwareMap.get(Servo.class, "lspindexerup");
-        Servo rspindexerup = hardwareMap.get(Servo.class, "rspindexerup");
+        intake = hardwareMap.get(DcMotor.class, "intake");
+        leftFlyWheel = hardwareMap.get(DcMotorEx.class, "lflywheel");
+        rightFlyWheel = hardwareMap.get(DcMotorEx.class, "rflywheel");
+        turretRotation = hardwareMap.get(DcMotor.class, "turretturn"); // need to configure
 
-        // Other motors
-        DcMotor turretRotation = hardwareMap.get(DcMotor.class, "turretturn"); // need to configure
+        spindexer = hardwareMap.get(CRServo.class, "spindexer");
+        tservo = hardwareMap.get(Servo.class, "tservo");
+        lspindexerup = hardwareMap.get(CRServo.class, "lspindexerup");
+        rspindexerup = hardwareMap.get(CRServo.class, "rspindexerup");
 
         // ---- Directions ----
         leftFrontDrive.setDirection(DcMotor.Direction.REVERSE);
@@ -54,6 +71,8 @@ public class OmniChassisWithVisionTest extends LinearOpMode {
         rightFlyWheel.setDirection(DcMotor.Direction.REVERSE);
         intake.setDirection(DcMotor.Direction.FORWARD);
 
+        rspindexerup.setDirection(CRServo.Direction.REVERSE);
+        tservo.setDirection(Servo.Direction.REVERSE);
 
         // ---- Run modes ----
         rightFrontDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
@@ -61,78 +80,137 @@ public class OmniChassisWithVisionTest extends LinearOpMode {
         leftBackDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         rightBackDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
-        leftFlyWheel.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        rightFlyWheel.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        leftFlyWheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        rightFlyWheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        PIDFCoefficients pidfCoefficients = new PIDFCoefficients(P,0,0,F);
+        leftFlyWheel.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
+        rightFlyWheel.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
         turretRotation.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         intake.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
-        // ---- Pinpoint (placeholder – does nothing unless you add real driver code) ----
-        PinpointIO pinpoint = new PinpointIO(hardwareMap, telemetry, "odo");
+        // ---- Pinpoint (placeholder) ----
+        pinpoint = new PinpointIO(hardwareMap, telemetry, "odo");
         pinpoint.initializeAndConfigure();
 
-        telemetry.addLine("Ready: Drive + Turret + Flywheels");
+        // Reset ramp limiter when init runs
+        prevMax = 0.275;
+
+        telemetry.addLine("Initialized. Press PLAY.");
+        telemetry.update();
+    }
+
+    @Override
+    public void start() {
+        // Called once when you press PLAY
+        prevMax = 0.275; // reset ramp at start too
+    }
+
+    @Override
+    public void loop() {
+
+        if (gamepad1.yWasPressed()) {
+            if (curTargetVelocity == highVelocity) {
+                curTargetVelocity = lowVelocity;
+            } else {curTargetVelocity = highVelocity;}
+        }
+        if (gamepad1.bWasPressed()) {
+            stepIndex = (stepIndex + 1) % stepSizes.length;
+        }
+        if (gamepad1.dpadLeftWasPressed()) {
+            F -= stepSizes[stepIndex];
+        } if (gamepad1.dpadRightWasPressed()) {
+            F += stepSizes[stepIndex];
+        } if (gamepad1.dpadUpWasPressed()) {
+            P += stepSizes[stepIndex];
+        } if (gamepad1.dpadDownWasPressed()) {
+            P -= stepSizes[stepIndex];
+        }
+
+        // --- Spindexer up servos (gamepad1 left trigger) ---
+        if (gamepad1.left_trigger > 0.1) {
+            lspindexerup.setPower(1);
+            rspindexerup.setPower(1);
+        } else {
+            lspindexerup.setPower(0);
+            rspindexerup.setPower(0);
+        }
+
+        // --- Spindexer (gamepad1 right trigger) ---
+        if (gamepad1.right_trigger > 0.1) {
+            spindexer.setPower(1);
+        } else {
+            spindexer.setPower(0);
+        }
+        // --- Tservo positions (gamepad1 y/x) ---
+//        if (gamepad1.aWasPressed()) {
+//            tservo.setPosition(0.5);
+//        } else if (gamepad1.xWasPressed()) {
+//            tservo.setPosition(0);
+//        }x
+        // --- Turret rotation (gamepad2 bumpers) ---
+        if (gamepad2.right_bumper) {
+            turretRotation.setPower(1);
+        } else if (gamepad2.left_bumper) {
+            turretRotation.setPower(-1);
+        } else {
+            turretRotation.setPower(0);
+        }
+
+//        // --- Flywheel (gamepad2 right trigger) ---
+//        if (gamepad2.right_trigger > 0.1) {
+//            leftFlyWheel.setPower(1);
+//            rightFlyWheel.setPower(1);
+//        } else {
+//            leftFlyWheel.setPower(0);
+//            rightFlyWheel.setPower(0);
+//        }
+
+        // --- Intake (gamepad2 left trigger) ---
+        if (gamepad2.left_trigger > 0.1) {
+            intake.setPower(1);
+        } else {
+            intake.setPower(0);
+        }
+        PIDFCoefficients pidfCoefficients = new PIDFCoefficients(P,0,0,F);
+        leftFlyWheel.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
+        rightFlyWheel.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
+        leftFlyWheel.setVelocity(curTargetVelocity);
+        rightFlyWheel.setVelocity(curTargetVelocity);
+        double leftcurVelocity = leftFlyWheel.getVelocity();
+        double rightcurVelocity = rightFlyWheel.getVelocity();
+        double averagecurvelocity = ((leftcurVelocity + rightcurVelocity)/2);
+        double error = curTargetVelocity - averagecurvelocity;
+
+
+        // --- Drive control ---
+        double drive  = -gamepad1.left_stick_y;        // forward = +
+        double strafe = -gamepad1.left_stick_x;        // right/left
+        double turn   = -gamepad1.right_stick_x / 2.0; // slow turning
+
+        moveRobot(drive, strafe, turn);
+        telemetry.addData("Target velocity", curTargetVelocity);
+        telemetry.addData("Current velocity", "%.2f", averagecurvelocity);
+        telemetry.addData("Error", "%.2f", error);
         telemetry.update();
 
-        lspindexerup.setPosition(START_POS);
-        rspindexerup.setPosition(START_POS);
-        lspindexerup.scaleRange(0.0, 1.0);
-        rspindexerup.scaleRange(0.0, 1.0);
+    }
 
-        waitForStart();
+    @Override
+    public void stop() {
+        // Optional: ensure everything is off when opmode stops
+        leftFrontDrive.setPower(0);
+        rightFrontDrive.setPower(0);
+        leftBackDrive.setPower(0);
+        rightBackDrive.setPower(0);
 
-        while (opModeIsActive()) {
-            // Turret control (bumpers)
+        intake.setPower(0);
+        leftFlyWheel.setPower(0);
+        rightFlyWheel.setPower(0);
+        turretRotation.setPower(0);
 
-            if (gamepad2.y) {
-                lspindexerup.setPosition(INDEX_UP_POS);
-                rspindexerup.setPosition(INDEX_UP_POS);
-            }else {
-                lspindexerup.setPosition(START_POS);
-                rspindexerup.setPosition(START_POS);
-            }
-            if (gamepad2.x) {
-                spindexer.setPower(1);
-            } else {
-                spindexer.setPower(0);
-            } if (gamepad2.right_bumper) {
-                turretRotation.setPower(1);
-            } else if (gamepad2.left_bumper) {
-                turretRotation.setPower(-1);
-            } else {
-                turretRotation.setPower(0);
-            }
-            // Flywheel control (right trigger)
-            if (gamepad2.right_trigger > 0.1) {
-                leftFlyWheel.setPower(1);
-                rightFlyWheel.setPower(1);
-            } else {
-                leftFlyWheel.setPower(0);
-                rightFlyWheel.setPower(0);
-            }
-            // Intake Control (left trigger)
-            if (gamepad2.left_trigger > 0.1) {
-                intake.setPower(1);
-            } else {
-                intake.setPower(0);
-            }
-
-            double drive  = -gamepad1.left_stick_y;        // forward = +
-            double strafe = -gamepad1.left_stick_x;        // right/left
-            double turn   = -gamepad1.right_stick_x / 2.0; // slow turning
-
-            moveRobot(drive, strafe, turn);
-
-            // If/when you add the real Pinpoint driver, call it here
-            // pinpoint.update();
-
-            telemetry.addData("r2", "%.2f", gamepad1.right_trigger);
-            telemetry.addData("lflywheel power", "%.2f", leftFlyWheel.getPower());
-            telemetry.addData("rflywheel power", "%.2f", rightFlyWheel.getPower());
-            telemetry.addData("Drive", "%.2f", drive);
-            telemetry.addData("Strafe", "%.2f", strafe);
-            telemetry.addData("Turn", "%.2f", turn);
-            telemetry.update();
-        }
+        spindexer.setPower(0);
+        lspindexerup.setPower(0);
+        rspindexerup.setPower(0);
     }
 
     public void moveRobot(double drive, double strafe, double turn) {
@@ -145,6 +223,9 @@ public class OmniChassisWithVisionTest extends LinearOpMode {
         max = Math.max(max, Math.abs(leftBackPower));
         max = Math.max(max, Math.abs(rightBackPower));
 
+        // NOTE: This "ramp limiter" logic scales ALL wheel powers by "max"
+        // only when max increases quickly. This is unusual; leaving it as-is
+        // to preserve your behavior.
         if (max > prevMax + 0.075) {
             max = prevMax + 0.075;
             prevMax = max;
