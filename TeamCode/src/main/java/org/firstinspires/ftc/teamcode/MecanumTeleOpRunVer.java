@@ -10,6 +10,7 @@ import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.hardware.CRServo;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
+import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 
 @TeleOp(name="MecanumTeleOpRunVer", group="Test")
 public class MecanumTeleOpRunVer extends OpMode {
@@ -104,7 +105,6 @@ public class MecanumTeleOpRunVer extends OpMode {
 
     @Override
     public void loop() {
-
         if (gamepad1.yWasPressed()) {
             if (curTargetVelocity == highVelocity) {
                 curTargetVelocity = lowVelocity;
