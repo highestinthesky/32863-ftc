@@ -8,6 +8,7 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.hardware.CRServo;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
@@ -29,8 +30,9 @@ public class MecanumTeleOpRunVer extends OpMode {
 
     private CRServo spindexer;
     private Servo tservo;
-    private CRServo lspindexerup;
-    private CRServo rspindexerup;
+    private Servo lspindexerup;
+    private Servo rspindexerup;
+    private double tservoPosition = 0.0;
 
     // Optional ramp limiter state
     private static double prevMax = 0.275;
@@ -41,6 +43,13 @@ public class MecanumTeleOpRunVer extends OpMode {
     double P = 0;
     double[] stepSizes = {10.0, 1.0, 0.1, 0.001, 0.001};
     int stepIndex = 1;
+    public double basespindexerup = 180;
+    public double basespindexerdown = 70;
+    double curTargetspindexer = basespindexerdown;
+
+    // Timer for temporary indexer movement
+    private ElapsedTime indexerTimer = new ElapsedTime();
+    private boolean indexerTimerActive = false;
 
     // Pinpoint placeholder
     private PinpointIO pinpoint;
@@ -60,8 +69,8 @@ public class MecanumTeleOpRunVer extends OpMode {
 
         spindexer = hardwareMap.get(CRServo.class, "spindexer");
         tservo = hardwareMap.get(Servo.class, "tservo");
-        lspindexerup = hardwareMap.get(CRServo.class, "lspindexerup");
-        rspindexerup = hardwareMap.get(CRServo.class, "rspindexerup");
+        lspindexerup = hardwareMap.get(Servo.class, "lspindexerup");
+        rspindexerup = hardwareMap.get(Servo.class, "rspindexerup");
 
         // ---- Directions ----
         leftFrontDrive.setDirection(DcMotor.Direction.REVERSE);
@@ -72,8 +81,14 @@ public class MecanumTeleOpRunVer extends OpMode {
         rightFlyWheel.setDirection(DcMotor.Direction.REVERSE);
         intake.setDirection(DcMotor.Direction.FORWARD);
 
-        rspindexerup.setDirection(CRServo.Direction.REVERSE);
+        // Mirror the indexer servos so they move together
+        lspindexerup.setDirection(Servo.Direction.FORWARD);
+        rspindexerup.setDirection(Servo.Direction.FORWARD);
         tservo.setDirection(Servo.Direction.REVERSE);
+
+        // Set initial servo positions to 70 degrees
+        setServoAngle(lspindexerup, 70);
+        setServoAngle(rspindexerup, 70);
 
         // ---- Run modes ----
         rightFrontDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
@@ -105,62 +120,95 @@ public class MecanumTeleOpRunVer extends OpMode {
 
     @Override
     public void loop() {
-        if (gamepad1.yWasPressed()) {
-            if (curTargetVelocity == highVelocity) {
-                curTargetVelocity = lowVelocity;
-            } else {curTargetVelocity = highVelocity;}
-        }
-        if (gamepad1.bWasPressed()) {
-            stepIndex = (stepIndex + 1) % stepSizes.length;
-        }
-        if (gamepad1.dpadLeftWasPressed()) {
-            F -= stepSizes[stepIndex];
-        } if (gamepad1.dpadRightWasPressed()) {
-            F += stepSizes[stepIndex];
-        } if (gamepad1.dpadUpWasPressed()) {
-            P += stepSizes[stepIndex];
-        } if (gamepad1.dpadDownWasPressed()) {
-            P -= stepSizes[stepIndex];
+        int action = 0;
+        if (gamepad1.yWasPressed()) action = 1;
+        else if (gamepad1.bWasPressed()) action = 2;
+        else if (gamepad1.dpadLeftWasPressed()) action = 3;
+        else if (gamepad1.dpadRightWasPressed()) action = 4;
+        else if (gamepad1.dpadUpWasPressed()) action = 5;
+        else if (gamepad1.dpadDownWasPressed()) action = 6;
+
+        switch (action) {
+            case 1:
+                curTargetVelocity = (curTargetVelocity == highVelocity) ? lowVelocity : highVelocity;
+                break;
+            case 2:
+                stepIndex = (stepIndex + 1) % stepSizes.length;
+                break;
+            case 3:
+                F -= stepSizes[stepIndex];
+                break;
+            case 4:
+                F += stepSizes[stepIndex];
+                break;
+            case 5:
+                P += stepSizes[stepIndex];
+                break;
+            case 6:
+                P -= stepSizes[stepIndex];
+                break;
         }
 
-        // --- Spindexer up servos (gamepad1 left trigger) ---
-        if (gamepad1.left_trigger > 0.1) {
-            lspindexerup.setPower(1);
-            rspindexerup.setPower(1);
-        } else {
-            lspindexerup.setPower(0);
-            rspindexerup.setPower(0);
+        // --- Spindexer (gamepad1 triggers) ---
+        int spindexerState = 0;
+        if (gamepad1.right_trigger > 0.1) spindexerState = 1;
+        else if (gamepad1.left_trigger > 0.1) spindexerState = 2;
+        
+        switch (spindexerState) {
+            case 1:
+                spindexer.setPower(1);
+                break;
+            case 2:
+                spindexer.setPower(-1);
+                break;
+            default:
+                spindexer.setPower(0);
+                break;
+        }
+        
+        // --- Indexer control (gamepad2 B) ---
+        if (gamepad2.bWasPressed()) {
+            curTargetspindexer = basespindexerup;
+            indexerTimer.reset();
+            indexerTimerActive = true;
         }
 
-        // --- Spindexer (gamepad1 right trigger) ---
-        if (gamepad1.right_trigger > 0.1) {
-            spindexer.setPower(1);
-        } else {
-            spindexer.setPower(0);
+        if (indexerTimerActive && indexerTimer.seconds() >= 0.6) {
+            curTargetspindexer = basespindexerdown;
+            indexerTimerActive = false;
         }
-        // --- Tservo positions (gamepad1 y/x) ---
-//        if (gamepad1.aWasPressed()) {
-//            tservo.setPosition(0.5);
-//        } else if (gamepad1.xWasPressed()) {
-//            tservo.setPosition(0);
-//        }x
+
+        setServoAngle(lspindexerup, curTargetspindexer);
+        setServoAngle(rspindexerup, curTargetspindexer);
+
         // --- Turret rotation (gamepad2 bumpers) ---
-        if (gamepad2.right_bumper) {
-            turretRotation.setPower(1);
-        } else if (gamepad2.left_bumper) {
-            turretRotation.setPower(-1);
-        } else {
-            turretRotation.setPower(0);
+        int turretState = 0;
+        if (gamepad2.right_bumper) turretState = 1;
+        else if (gamepad2.left_bumper) turretState = 2;
+
+        switch (turretState) {
+            case 1:
+                turretRotation.setPower(1);
+                break;
+            case 2:
+                turretRotation.setPower(-1);
+                break;
+            default:
+                turretRotation.setPower(0);
+                break;
         }
 
-//        // --- Flywheel (gamepad2 right trigger) ---
-//        if (gamepad2.right_trigger > 0.1) {
-//            leftFlyWheel.setPower(1);
-//            rightFlyWheel.setPower(1);
-//        } else {
-//            leftFlyWheel.setPower(0);
-//            rightFlyWheel.setPower(0);
-//        }
+        // --- T-Servo incremental control (gamepad2 X/Y) ---
+        if (gamepad2.x) {
+            tservoPosition += 0.1;
+        } else if (gamepad2.y) {
+            tservoPosition -= 0.1;
+        }
+
+        if (tservoPosition > 1.0) tservoPosition = 1.0;
+        else if (tservoPosition < 0.0) tservoPosition = 0.0;
+        
+        tservo.setPosition(tservoPosition);
 
         // --- Intake (gamepad2 left trigger) ---
         if (gamepad2.left_trigger > 0.1) {
@@ -168,6 +216,7 @@ public class MecanumTeleOpRunVer extends OpMode {
         } else {
             intake.setPower(0);
         }
+        
         PIDFCoefficients pidfCoefficients = new PIDFCoefficients(P,0,0,F);
         leftFlyWheel.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
         rightFlyWheel.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
@@ -180,16 +229,23 @@ public class MecanumTeleOpRunVer extends OpMode {
 
 
         // --- Drive control ---
-        double drive  = -gamepad1.left_stick_y;        // forward = +
-        double strafe = -gamepad1.left_stick_x;        // right/left
-        double turn   = -gamepad1.right_stick_x / 2.0; // slow turning
+        double drive  = -gamepad1.left_stick_y;        
+        double strafe = -gamepad1.left_stick_x;        
+        double turn   = -gamepad1.right_stick_x / 2.0; 
 
         moveRobot(drive, strafe, turn);
+        
         telemetry.addData("Target velocity", curTargetVelocity);
         telemetry.addData("Current velocity", "%.2f", averagecurvelocity);
         telemetry.addData("Error", "%.2f", error);
+        telemetry.addLine("--------------------------------------");
+        telemetry.addData("T-Servo Position", "%.3f", tservoPosition);
+        telemetry.addData("Indexer L Angle", "%.1f", lspindexerup.getPosition() * 300.0);
+        telemetry.addData("Indexer R Angle", "%.1f", rspindexerup.getPosition() * 300.0);
+        telemetry.addData("P", "%.4f (D-Pad U/D)", P);
+        telemetry.addData("F", "%.4f (D-Pad L/R)", F);
+        telemetry.addData("Step Size", "%.4f (B Button)", stepSizes[stepIndex]);
         telemetry.update();
-
     }
 
     @Override
@@ -206,8 +262,13 @@ public class MecanumTeleOpRunVer extends OpMode {
         turretRotation.setPower(0);
 
         spindexer.setPower(0);
-        lspindexerup.setPower(0);
-        rspindexerup.setPower(0);
+    }
+
+    /**
+     * Sets a servo position based on degrees (0-300 for "full range" servos).
+     */
+    public void setServoAngle(Servo servo, double angle) {
+        servo.setPosition(angle / 300.0);
     }
 
     public void moveRobot(double drive, double strafe, double turn) {
@@ -220,9 +281,6 @@ public class MecanumTeleOpRunVer extends OpMode {
         max = Math.max(max, Math.abs(leftBackPower));
         max = Math.max(max, Math.abs(rightBackPower));
 
-        // NOTE: This "ramp limiter" logic scales ALL wheel powers by "max"
-        // only when max increases quickly. This is unusual; leaving it as-is
-        // to preserve your behavior.
         if (max > prevMax + 0.075) {
             max = prevMax + 0.075;
             prevMax = max;
@@ -246,9 +304,6 @@ public class MecanumTeleOpRunVer extends OpMode {
         rightBackDrive.setPower(rightBackPower);
     }
 
-    /**
-     * Minimal placeholder
-     */
     private static class PinpointIO {
         private final Telemetry telemetry;
         PinpointIO(HardwareMap hardwareMap, Telemetry telemetry, String deviceName) {
