@@ -44,7 +44,9 @@ public class MecanumTeleOpRunVer extends OpMode {
     double rampwheelbackwards = -300;
     // Telemetry notice when a motor *first* fails
     private String faultEventMsg = "";
-    private int faultEventLoopsLeft = 0; // show the event message for a short time
+    private int faultEventLoopsLeft = 0;
+    private boolean stopping = false;
+
 
 
 //    double F = 0;
@@ -83,51 +85,48 @@ public class MecanumTeleOpRunVer extends OpMode {
         leftBackDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         rightBackDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
-
+        // intake setup call
         intake = hardwareMap.get(DcMotor.class, "intake");
+        // intake directions setup
+        intake.setDirection(DcMotor.Direction.FORWARD);
+        // intake encoder setup
+        intake.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+
+        // flywheel setup call
         leftFlyWheel = hardwareMap.get(DcMotorEx.class, "lflywheel");
         rightFlyWheel = hardwareMap.get(DcMotorEx.class, "rflywheel");
-        rampwheel = hardwareMap.get(DcMotorEx.class, "turretturn"); // need to configure
-
-        //spindexer = hardwareMap.get(CRServo.class, "spindexer");
-        tservo = hardwareMap.get(Servo.class, "tservo");
-        lspindexerup = hardwareMap.get(Servo.class, "lspindexerup");
-        rspindexerup = hardwareMap.get(Servo.class, "rspindexerup");
-
-        // ---- Directions ----
-
-
-        intake.setDirection(DcMotor.Direction.FORWARD);
-
-        // Mirror the indexer servos so they move together
-        lspindexerup.setDirection(Servo.Direction.FORWARD);
-        rspindexerup.setDirection(Servo.Direction.FORWARD);
-        tservo.setDirection(Servo.Direction.REVERSE);
+        // flywheel directions
         rightFlyWheel.setDirection(DcMotorEx.Direction.FORWARD);
         leftFlyWheel.setDirection(DcMotorEx.Direction.REVERSE);
-        rampwheel.setDirection(DcMotorEx.Direction.REVERSE);
-
-
-        // Set initial servo positions to 70 degrees
-        setServoAngle(lspindexerup, 70);
-        setServoAngle(rspindexerup, 70);
-
-        // ---- Run modes ----
-
-
+        // flywheel encoder setup
         leftFlyWheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         rightFlyWheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        // flywheel PIDF setup
         PIDFCoefficients pidfCoefficients = new PIDFCoefficients(12,0,0,2);
         leftFlyWheel.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
         rightFlyWheel.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
-        rampwheel.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
-        intake.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
+        // rampwheel setup call
+        rampwheel = hardwareMap.get(DcMotorEx.class, "turretturn");
+        // rampwheel directions
+        rampwheel.setDirection(DcMotorEx.Direction.REVERSE);
+        // rampwheel encoder setup
+        rampwheel.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
+        // rampwheel PIDF coefficients setup
         PIDFCoefficients rampwheelcoefficients = new PIDFCoefficients(4,0,0,20);
         rampwheel.setPIDFCoefficients(DcMotorEx.RunMode.RUN_USING_ENCODER, rampwheelcoefficients);
 
+        // tservo setup call
+        tservo = hardwareMap.get(Servo.class, "tservo");
+        // tservo directions
+        tservo.setDirection(Servo.Direction.REVERSE);
 
-
+        //spindexerup setup calls
+        lspindexerup = hardwareMap.get(Servo.class, "lspindexerup");
+        rspindexerup = hardwareMap.get(Servo.class, "rspindexerup");
+        // spindexerup directions
+        lspindexerup.setDirection(Servo.Direction.FORWARD);
+        rspindexerup.setDirection(Servo.Direction.FORWARD);
 
         // ---- Pinpoint (placeholder) ----
         pinpoint = new PinpointIO(hardwareMap, telemetry, "odo");
@@ -139,12 +138,15 @@ public class MecanumTeleOpRunVer extends OpMode {
 
     @Override
     public void start() {
-
+        // Set initial servo positions to 70 degrees
+        setServoAngle(lspindexerup, 70);
+        setServoAngle(rspindexerup, 70);
         prevMax = 0.275; // reset ramp at start too
     }
 
     @Override
     public void loop() {
+        if (stopping) return;
 //        int action = 0;
 //        if (gamepad1.bWasPressed()) action = 2;
 //        else if (gamepad1.dpadLeftWasPressed()) action = 3;
@@ -273,18 +275,44 @@ public class MecanumTeleOpRunVer extends OpMode {
     @Override
     public void stop() {
         // Optional: ensure everything is off when opmode stops
-        leftFrontDrive.setPower(0);
-        rightFrontDrive.setPower(0);
-        leftBackDrive.setPower(0);
-        rightBackDrive.setPower(0);
+        stopping = true;
 
-        intake.setPower(0);
-        leftFlyWheel.setPower(0);
-        rightFlyWheel.setPower(0);
-        rampwheel.setPower(0);
+        // Stop velocity-controlled motors first
+        safeSetVelocity(leftFlyWheel, 0);
+        safeSetVelocity(rightFlyWheel, 0);
+        safeSetVelocity(rampwheel, 0);
+
+        // Stop everything else
+        safeSetPower(leftFrontDrive, 0);
+        safeSetPower(rightFrontDrive, 0);
+        safeSetPower(leftBackDrive, 0);
+        safeSetPower(rightBackDrive, 0);
+        safeSetPower(intake, 0);
+
+        // In case fault mode set one motor to FLOAT, restore BRAKE
+        safeSetZeroPowerBehavior(leftFrontDrive, DcMotor.ZeroPowerBehavior.BRAKE);
+        safeSetZeroPowerBehavior(rightFrontDrive, DcMotor.ZeroPowerBehavior.BRAKE);
+        safeSetZeroPowerBehavior(leftBackDrive, DcMotor.ZeroPowerBehavior.BRAKE);
+        safeSetZeroPowerBehavior(rightBackDrive, DcMotor.ZeroPowerBehavior.BRAKE);
 
     }
+    private void safeSetPower(DcMotor m, double p) {
+        if (m == null) return;
+        try { m.setPower(p); } catch (Exception ignored) {}
+    }
 
+    private void safeSetVelocity(DcMotorEx m, double v) {
+        if (m == null) return;
+        try { m.setVelocity(v); }
+        catch (Exception ignored) {
+            try { m.setPower(0); } catch (Exception ignored2) {}
+        }
+    }
+
+    private void safeSetZeroPowerBehavior(DcMotor m, DcMotor.ZeroPowerBehavior b) {
+        if (m == null) return;
+        try { m.setZeroPowerBehavior(b); } catch (Exception ignored) {}
+    }
     /**
      * Sets a servo position based on degrees (0-300 for "full range" servos).
      */
@@ -343,6 +371,7 @@ public class MecanumTeleOpRunVer extends OpMode {
     private final MotorHealth rbHealth = new MotorHealth();
 
     private void updateHealth(MotorHealth h, DcMotorEx m, double cmd, double vel, double maxVel) {
+        if (stopping) return;
         if (Math.abs(cmd) < CMD_MIN || maxVel < VEL_ABS_MIN) {
             h.badLoops = 0;
             h.goodLoops = 0;
