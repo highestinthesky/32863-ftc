@@ -7,28 +7,25 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
-import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
-import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 
 @TeleOp(name="MecanumTeleOpRunVer", group="Test")
 public class MecanumTeleOpRunVer extends OpMode {
 
     // Drive motors
-    private DcMotor leftFrontDrive;
-    private DcMotor rightFrontDrive;
-    private DcMotor leftBackDrive;
-    private DcMotor rightBackDrive;
+    private DcMotorEx leftFrontDrive;
+    private DcMotorEx rightFrontDrive;
+    private DcMotorEx leftBackDrive;
+    private DcMotorEx rightBackDrive;
 
     // Other motors/servos
     private DcMotor intake;
     private DcMotorEx leftFlyWheel;
     private DcMotorEx rightFlyWheel;
-    private DcMotor turretRotation;
+    private DcMotorEx rampwheel;
 
-    private CRServo spindexer;
     private Servo tservo;
     private Servo lspindexerup;
     private Servo rspindexerup;
@@ -39,70 +36,98 @@ public class MecanumTeleOpRunVer extends OpMode {
     public double highVelocity = 6000;
     public double lowVelocity = 1500;
     double curTargetVelocity = highVelocity;
-    double F = 0;
-    double P = 0;
-    double[] stepSizes = {10.0, 1.0, 0.1, 0.001, 0.001};
-    int stepIndex = 1;
     public double basespindexerup = 180;
     public double basespindexerdown = 70;
     double curTargetspindexer = basespindexerdown;
+    double rampwheelOn = 1150;
+    double rampwheelOff = 0;
+    double rampwheelbackwards = -300;
+    // Telemetry notice when a motor *first* fails
+    private String faultEventMsg = "";
+    private int faultEventLoopsLeft = 0; // show the event message for a short time
+
+
+//    double F = 0;
+//    double P = 0;
+//    double[] stepSizes = {10.0, 1.0, 0.1, 0.001, 0.001};
+//    int stepIndex = 1;
 
     // Timer for temporary indexer movement
-    private ElapsedTime indexerTimer = new ElapsedTime();
-    private boolean indexerTimerActive = false;
+    private ElapsedTime indexerAndRampWheelTimer = new ElapsedTime();
+    private boolean indexerAndRampWheelTimerActive = false;
+    private boolean overrideMode = false;
 
     // Pinpoint placeholder
     private PinpointIO pinpoint;
 
     @Override
     public void init() {
-        // ---- Motors ----
-        leftFrontDrive  = hardwareMap.get(DcMotor.class, "frontLeftMotor");
-        rightFrontDrive = hardwareMap.get(DcMotor.class, "frontRightMotor");
-        leftBackDrive   = hardwareMap.get(DcMotor.class, "backLeftMotor");
-        rightBackDrive  = hardwareMap.get(DcMotor.class, "backRightMotor");
+        // chassis motors setup
+        leftFrontDrive  = hardwareMap.get(DcMotorEx.class, "frontLeftMotor");
+        rightFrontDrive = hardwareMap.get(DcMotorEx.class, "frontRightMotor");
+        leftBackDrive   = hardwareMap.get(DcMotorEx.class, "backLeftMotor");
+        rightBackDrive  = hardwareMap.get(DcMotorEx.class, "backRightMotor");
+        // chassis motors direction
+        leftFrontDrive.setDirection(DcMotor.Direction.REVERSE);
+        leftBackDrive.setDirection(DcMotor.Direction.REVERSE);
+        rightFrontDrive.setDirection(DcMotor.Direction.FORWARD);
+        rightBackDrive.setDirection(DcMotor.Direction.FORWARD);
+        // chassis brake modes
+        leftFrontDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        rightFrontDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        leftBackDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        rightBackDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        // chassis encoder setup
+        rightFrontDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        leftFrontDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        leftBackDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        rightBackDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+
 
         intake = hardwareMap.get(DcMotor.class, "intake");
         leftFlyWheel = hardwareMap.get(DcMotorEx.class, "lflywheel");
         rightFlyWheel = hardwareMap.get(DcMotorEx.class, "rflywheel");
-        turretRotation = hardwareMap.get(DcMotor.class, "turretturn"); // need to configure
+        rampwheel = hardwareMap.get(DcMotorEx.class, "turretturn"); // need to configure
 
-        spindexer = hardwareMap.get(CRServo.class, "spindexer");
+        //spindexer = hardwareMap.get(CRServo.class, "spindexer");
         tservo = hardwareMap.get(Servo.class, "tservo");
         lspindexerup = hardwareMap.get(Servo.class, "lspindexerup");
         rspindexerup = hardwareMap.get(Servo.class, "rspindexerup");
 
         // ---- Directions ----
-        leftFrontDrive.setDirection(DcMotor.Direction.REVERSE);
-        leftBackDrive.setDirection(DcMotor.Direction.REVERSE);
-        rightFrontDrive.setDirection(DcMotor.Direction.FORWARD);
-        rightBackDrive.setDirection(DcMotor.Direction.FORWARD);
 
-        rightFlyWheel.setDirection(DcMotor.Direction.REVERSE);
+
         intake.setDirection(DcMotor.Direction.FORWARD);
 
         // Mirror the indexer servos so they move together
         lspindexerup.setDirection(Servo.Direction.FORWARD);
         rspindexerup.setDirection(Servo.Direction.FORWARD);
         tservo.setDirection(Servo.Direction.REVERSE);
+        rightFlyWheel.setDirection(DcMotorEx.Direction.FORWARD);
+        leftFlyWheel.setDirection(DcMotorEx.Direction.REVERSE);
+        rampwheel.setDirection(DcMotorEx.Direction.REVERSE);
+
 
         // Set initial servo positions to 70 degrees
         setServoAngle(lspindexerup, 70);
         setServoAngle(rspindexerup, 70);
 
         // ---- Run modes ----
-        rightFrontDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        leftFrontDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        leftBackDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        rightBackDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+
 
         leftFlyWheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         rightFlyWheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        PIDFCoefficients pidfCoefficients = new PIDFCoefficients(P,0,0,F);
+        PIDFCoefficients pidfCoefficients = new PIDFCoefficients(12,0,0,2);
         leftFlyWheel.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
         rightFlyWheel.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
-        turretRotation.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        rampwheel.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
         intake.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+
+        PIDFCoefficients rampwheelcoefficients = new PIDFCoefficients(4,0,0,20);
+        rampwheel.setPIDFCoefficients(DcMotorEx.RunMode.RUN_USING_ENCODER, rampwheelcoefficients);
+
+
+
 
         // ---- Pinpoint (placeholder) ----
         pinpoint = new PinpointIO(hardwareMap, telemetry, "odo");
@@ -114,137 +139,134 @@ public class MecanumTeleOpRunVer extends OpMode {
 
     @Override
     public void start() {
-        // Called once when you press PLAY
+
         prevMax = 0.275; // reset ramp at start too
     }
 
     @Override
     public void loop() {
-        int action = 0;
-        if (gamepad1.yWasPressed()) action = 1;
-        else if (gamepad1.bWasPressed()) action = 2;
-        else if (gamepad1.dpadLeftWasPressed()) action = 3;
-        else if (gamepad1.dpadRightWasPressed()) action = 4;
-        else if (gamepad1.dpadUpWasPressed()) action = 5;
-        else if (gamepad1.dpadDownWasPressed()) action = 6;
+//        int action = 0;
+//        if (gamepad1.bWasPressed()) action = 2;
+//        else if (gamepad1.dpadLeftWasPressed()) action = 3;
+//        else if (gamepad1.dpadRightWasPressed()) action = 4;
+//        else if (gamepad1.dpadUpWasPressed()) action = 5;
+//        else if (gamepad1.dpadDownWasPressed()) action = 6;
+//
+//        switch (action) {
+//            case 2:
+//                stepIndex = (stepIndex + 1) % stepSizes.length;
+//                break;
+//            case 3:
+//                F -= stepSizes[stepIndex];
+//                break;
+//            case 4:
+//                F += stepSizes[stepIndex];
+//                break;
+//            case 5:
+//                P += stepSizes[stepIndex];
+//                break;
+//            case 6:
+//                P -= stepSizes[stepIndex];
+//                break;
+//        }
+        //Flywheel controlling velocity
+        if (gamepad1.yWasPressed()) curTargetVelocity = (curTargetVelocity == highVelocity) ? lowVelocity : highVelocity;
 
-        switch (action) {
-            case 1:
-                curTargetVelocity = (curTargetVelocity == highVelocity) ? lowVelocity : highVelocity;
-                break;
-            case 2:
-                stepIndex = (stepIndex + 1) % stepSizes.length;
-                break;
-            case 3:
-                F -= stepSizes[stepIndex];
-                break;
-            case 4:
-                F += stepSizes[stepIndex];
-                break;
-            case 5:
-                P += stepSizes[stepIndex];
-                break;
-            case 6:
-                P -= stepSizes[stepIndex];
-                break;
+        // activating overrideMode
+        if (gamepad2.aWasPressed() && !gamepad2.aWasReleased()) {overrideMode = true;}
+        else {overrideMode = false;}
+
+        // code to change rampwheel to go backwards
+        if (overrideMode && gamepad2.right_trigger > 0.1) {
+            rampwheel.setVelocity(rampwheelbackwards);
+        } else if (overrideMode){
+            rampwheel.setVelocity(rampwheelOff);
         }
 
-        // --- Spindexer (gamepad1 triggers) ---
-        int spindexerState = 0;
-        if (gamepad1.right_trigger > 0.1) spindexerState = 1;
-        else if (gamepad1.left_trigger > 0.1) spindexerState = 2;
-        
-        switch (spindexerState) {
-            case 1:
-                spindexer.setPower(1);
-                break;
-            case 2:
-                spindexer.setPower(-1);
-                break;
-            default:
-                spindexer.setPower(0);
-                break;
-        }
-        
-        // --- Indexer control (gamepad2 B) ---
+        // --- Indexer control + rampWheel control (gamepad2 B) ---
         if (gamepad2.bWasPressed()) {
+            PIDFCoefficients rampWheelCoefficients = new PIDFCoefficients(4,0,0,20);
+            rampwheel.setPIDFCoefficients(DcMotorEx.RunMode.RUN_USING_ENCODER, rampWheelCoefficients);
+            rampwheel.setVelocity(rampwheelOn);
             curTargetspindexer = basespindexerup;
-            indexerTimer.reset();
-            indexerTimerActive = true;
+            indexerAndRampWheelTimer.reset();
+            indexerAndRampWheelTimerActive = true;
         }
-
-        if (indexerTimerActive && indexerTimer.seconds() >= 0.6) {
+        if (indexerAndRampWheelTimerActive && indexerAndRampWheelTimer.seconds() >= 0.3 && indexerAndRampWheelTimer.seconds() <= 0.6) {
             curTargetspindexer = basespindexerdown;
-            indexerTimerActive = false;
         }
-
+        if (indexerAndRampWheelTimerActive && indexerAndRampWheelTimer.seconds() >= 0.8) {
+            rampwheel.setVelocity(rampwheelOff);
+            indexerAndRampWheelTimerActive = false;
+        }
         setServoAngle(lspindexerup, curTargetspindexer);
         setServoAngle(rspindexerup, curTargetspindexer);
 
-        // --- Turret rotation (gamepad2 bumpers) ---
-        int turretState = 0;
-        if (gamepad2.right_bumper) turretState = 1;
-        else if (gamepad2.left_bumper) turretState = 2;
 
-        switch (turretState) {
-            case 1:
-                turretRotation.setPower(1);
-                break;
-            case 2:
-                turretRotation.setPower(-1);
-                break;
-            default:
-                turretRotation.setPower(0);
-                break;
-        }
+//         --- Turret rotation (gamepad2 bumpers) ---
+//        int turretState = 0;
+//        if (gamepad2.right_bumper) turretState = 1;
+//        else if (gamepad2.left_bumper) turretState = 2;
+//
+//        switch (turretState) {
+//            case 1:
+//                turretRotation.setPower(1);
+//                break;
+//            case 2:
+//                turretRotation.setPower(-1);
+//                break;
+//            default:
+//                turretRotation.setPower(0);
+//                break;
+//        }
 
         // --- T-Servo incremental control (gamepad2 X/Y) ---
-        if (gamepad2.x) {
-            tservoPosition += 0.1;
-        } else if (gamepad2.y) {
-            tservoPosition -= 0.1;
-        }
+//        if (gamepad2.x) {
+//            tservoPosition += 0.1;
+//        } else if (gamepad2.y) {
+//            tservoPosition -= 0.1;
+//        }
 
-        if (tservoPosition > 1.0) tservoPosition = 1.0;
-        else if (tservoPosition < 0.0) tservoPosition = 0.0;
-        
-        tservo.setPosition(tservoPosition);
+//        if (tservoPosition > 1.0) tservoPosition = 1.0;
+//        else if (tservoPosition < 0.0) tservoPosition = 0.0;
+//
+//        tservo.setPosition(tservoPosition);
 
         // --- Intake (gamepad2 left trigger) ---
         if (gamepad2.left_trigger > 0.1) {
-            intake.setPower(1);
+            if (overrideMode) {
+                intake.setPower(-1);
+            } else {
+                intake.setPower(1);
+            }
         } else {
             intake.setPower(0);
         }
         
-        PIDFCoefficients pidfCoefficients = new PIDFCoefficients(P,0,0,F);
-        leftFlyWheel.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
-        rightFlyWheel.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
-        leftFlyWheel.setVelocity(curTargetVelocity);
-        rightFlyWheel.setVelocity(curTargetVelocity);
-        double leftcurVelocity = leftFlyWheel.getVelocity();
-        double rightcurVelocity = rightFlyWheel.getVelocity();
-        double averagecurvelocity = ((leftcurVelocity + rightcurVelocity)/2);
-        double error = curTargetVelocity - averagecurvelocity;
+        if (gamepad2.right_bumper) {
+            PIDFCoefficients pidfCoefficients = new PIDFCoefficients(12,0,0,4);
+            leftFlyWheel.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
+            rightFlyWheel.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
+            leftFlyWheel.setVelocity(curTargetVelocity);
+            rightFlyWheel.setVelocity(curTargetVelocity);
+        } else{
+            leftFlyWheel.setVelocity(0);
+            rightFlyWheel.setVelocity(0);
+        }
 
+        //temporary controls for the rampwheel
 
         // --- Drive control ---
         double drive  = -gamepad1.left_stick_y;        
         double strafe = -gamepad1.left_stick_x;        
-        double turn   = -gamepad1.right_stick_x / 2.0; 
+        double turn   = -gamepad1.right_stick_x;
 
-        moveRobot(drive, strafe, turn);
+        moveRobotFaultTolerant(drive, strafe, turn);
         
-        telemetry.addData("Target velocity", curTargetVelocity);
-        telemetry.addData("Current velocity", "%.2f", averagecurvelocity);
-        telemetry.addData("Error", "%.2f", error);
+
         telemetry.addLine("--------------------------------------");
         telemetry.addData("T-Servo Position", "%.3f", tservoPosition);
-        telemetry.addData("Indexer L Angle", "%.1f", lspindexerup.getPosition() * 300.0);
-        telemetry.addData("Indexer R Angle", "%.1f", rspindexerup.getPosition() * 300.0);
-        telemetry.addData("P", "%.4f (D-Pad U/D)", P);
-        telemetry.addData("F", "%.4f (D-Pad L/R)", F);
-        telemetry.addData("Step Size", "%.4f (B Button)", stepSizes[stepIndex]);
+        telemetry.addData("Override Mode", overrideMode);
         telemetry.update();
     }
 
@@ -259,9 +281,8 @@ public class MecanumTeleOpRunVer extends OpMode {
         intake.setPower(0);
         leftFlyWheel.setPower(0);
         rightFlyWheel.setPower(0);
-        turretRotation.setPower(0);
+        rampwheel.setPower(0);
 
-        spindexer.setPower(0);
     }
 
     /**
@@ -271,38 +292,211 @@ public class MecanumTeleOpRunVer extends OpMode {
         servo.setPosition(angle / 300.0);
     }
 
-    public void moveRobot(double drive, double strafe, double turn) {
-        double leftFrontPower  = drive - strafe - turn;
-        double rightFrontPower = drive + strafe + turn;
-        double leftBackPower   = drive + strafe - turn;
-        double rightBackPower  = drive - strafe + turn;
+//    public void moveRobot(double drive, double strafe, double turn) {
+//        double leftFrontPower  = drive - strafe - turn;
+//        double rightFrontPower = drive + strafe + turn;
+//        double leftBackPower   = drive + strafe - turn;
+//        double rightBackPower  = drive - strafe + turn;
+//
+//        double max = Math.max(Math.abs(leftFrontPower), Math.abs(rightFrontPower));
+//        max = Math.max(max, Math.abs(leftBackPower));
+//        max = Math.max(max, Math.abs(rightBackPower));
+//
+//        if (max > prevMax + 0.075) {
+//            max = prevMax + 0.075;
+//            prevMax = max;
+//
+//            leftFrontPower  *= max;
+//            rightFrontPower *= max;
+//            leftBackPower   *= max;
+//            rightBackPower  *= max;
+//        } else if (max > 1.0) {
+//            leftFrontPower  /= max;
+//            rightFrontPower /= max;
+//            leftBackPower   /= max;
+//            rightBackPower  /= max;
+//        } else {
+//            prevMax = max;
+//        }
+//
+//        leftFrontDrive.setPower(leftFrontPower);
+//        rightFrontDrive.setPower(rightFrontPower);
+//        leftBackDrive.setPower(leftBackPower);
+//        rightBackDrive.setPower(rightBackPower);
+//    }
 
-        double max = Math.max(Math.abs(leftFrontPower), Math.abs(rightFrontPower));
-        max = Math.max(max, Math.abs(leftBackPower));
-        max = Math.max(max, Math.abs(rightBackPower));
+    private static final double CMD_MIN = 0.35;
+    private static final double VEL_ABS_MIN = 120.0;  // ticks/sec
+    private static final double VEL_REL_RATIO = 0.20;
+    private static final int FAIL_LOOPS = 8;
+    private static final int RECOVER_LOOPS = 15;
 
-        if (max > prevMax + 0.075) {
-            max = prevMax + 0.075;
-            prevMax = max;
+    private static class MotorHealth {
+        int badLoops = 0;
+        int goodLoops = 0;
+        boolean failed = false;
+    }
 
-            leftFrontPower  *= max;
-            rightFrontPower *= max;
-            leftBackPower   *= max;
-            rightBackPower  *= max;
-        } else if (max > 1.0) {
-            leftFrontPower  /= max;
-            rightFrontPower /= max;
-            leftBackPower   /= max;
-            rightBackPower  /= max;
-        } else {
-            prevMax = max;
+    private final MotorHealth lfHealth = new MotorHealth();
+    private final MotorHealth rfHealth = new MotorHealth();
+    private final MotorHealth lbHealth = new MotorHealth();
+    private final MotorHealth rbHealth = new MotorHealth();
+
+    private void updateHealth(MotorHealth h, DcMotorEx m, double cmd, double vel, double maxVel) {
+        if (Math.abs(cmd) < CMD_MIN || maxVel < VEL_ABS_MIN) {
+            h.badLoops = 0;
+            h.goodLoops = 0;
+            return;
         }
 
-        leftFrontDrive.setPower(leftFrontPower);
-        rightFrontDrive.setPower(rightFrontPower);
-        leftBackDrive.setPower(leftBackPower);
-        rightBackDrive.setPower(rightBackPower);
+        double threshold = Math.max(VEL_ABS_MIN, maxVel * VEL_REL_RATIO);
+        boolean moving = vel >= threshold;
+
+        if (!moving) {
+            h.badLoops++;
+            h.goodLoops = 0;
+            if (h.badLoops >= FAIL_LOOPS) {
+                if (!h.failed) m.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+                h.failed = true;
+            }
+        } else {
+            h.goodLoops++;
+            h.badLoops = 0;
+            if (h.failed && h.goodLoops >= RECOVER_LOOPS) {
+                h.failed = false;
+                m.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+            }
+        }
     }
+
+    public void moveRobotFaultTolerant(double drive, double strafe, double turn) {
+        // Remember previous failure states (so we can detect "just failed")
+        boolean prevLfFailed = lfHealth.failed;
+        boolean prevRfFailed = rfHealth.failed;
+        boolean prevLbFailed = lbHealth.failed;
+        boolean prevRbFailed = rbHealth.failed;
+
+        // --- Measure current velocities ---
+        double vLF = Math.abs(leftFrontDrive.getVelocity());
+        double vRF = Math.abs(rightFrontDrive.getVelocity());
+        double vLB = Math.abs(leftBackDrive.getVelocity());
+        double vRB = Math.abs(rightBackDrive.getVelocity());
+        double maxV = Math.max(Math.max(vLF, vRF), Math.max(vLB, vRB));
+
+        // --- Normal 4-wheel powers (your exact mapping) ---
+        double lf = drive - strafe - turn;
+        double rf = drive + strafe + turn;
+        double lb = drive + strafe - turn;
+        double rb = drive - strafe + turn;
+
+        // Normalize these for detection consistency
+        double detMax = Math.max(Math.max(Math.abs(lf), Math.abs(rf)),
+                Math.max(Math.abs(lb), Math.abs(rb)));
+        if (detMax > 1.0) {
+            lf /= detMax; rf /= detMax; lb /= detMax; rb /= detMax;
+        }
+
+        // --- Update health flags ---
+        updateHealth(lfHealth, leftFrontDrive,  lf, vLF, maxV);
+        updateHealth(rfHealth, rightFrontDrive, rf, vRF, maxV);
+        updateHealth(lbHealth, leftBackDrive,   lb, vLB, maxV);
+        updateHealth(rbHealth, rightBackDrive,  rb, vRB, maxV);
+
+        boolean lfOk = !lfHealth.failed;
+        boolean rfOk = !rfHealth.failed;
+        boolean lbOk = !lbHealth.failed;
+        boolean rbOk = !rbHealth.failed;
+
+        int failedCount = (lfOk ? 0 : 1) + (rfOk ? 0 : 1) + (lbOk ? 0 : 1) + (rbOk ? 0 : 1);
+
+        // --- If a motor JUST failed this loop, create the requested telemetry message ---
+        if (!prevLfFailed && lfHealth.failed) {
+            faultEventMsg = "Front Left motor is currently offline and the system has adjusted.";
+            faultEventLoopsLeft = 30; // show for ~0.6s at ~50Hz
+        } else if (!prevRfFailed && rfHealth.failed) {
+            faultEventMsg = "Front Right motor is currently offline and the system has adjusted.";
+            faultEventLoopsLeft = 30;
+        } else if (!prevLbFailed && lbHealth.failed) {
+            faultEventMsg = "Back Left motor is currently offline and the system has adjusted.";
+            faultEventLoopsLeft = 30;
+        } else if (!prevRbFailed && rbHealth.failed) {
+            faultEventMsg = "Back Right motor is currently offline and the system has adjusted.";
+            faultEventLoopsLeft = 30;
+        }
+
+        // --- If exactly ONE motor failed, remap to 3-wheel solution ---
+        if (failedCount == 1) {
+            double d = drive, s = strafe, t = turn;
+
+            if (!lfOk) {
+                lf = 0;
+                rf = 2 * (s + t);
+                lb = 2 * (d - t);
+                rb = 2 * (d - s);
+            } else if (!rfOk) {
+                rf = 0;
+                lf = -2 * (s + t);
+                lb = 2 * (d + s);
+                rb = 2 * (d + t);
+            } else if (!lbOk) {
+                lb = 0;
+                lf = 2 * (d - t);
+                rf = 2 * (d + s);
+                rb = 2 * (t - s);
+            } else { // !rbOk
+                rb = 0;
+                lf = 2 * (d - s);
+                rf = 2 * (d + t);
+                lb = 2 * (s - t);
+            }
+        }
+
+        // --- Normalize final outputs ---
+        double maxAbs = Math.max(Math.max(Math.abs(lf), Math.abs(rf)),
+                Math.max(Math.abs(lb), Math.abs(rb)));
+        if (maxAbs > 1.0) {
+            lf /= maxAbs; rf /= maxAbs; lb /= maxAbs; rb /= maxAbs;
+            maxAbs = 1.0;
+        }
+
+        // --- Keep your ramp limiter behavior, but apply it correctly ---
+        double desired = maxAbs; // 0..1
+        double allowed = desired;
+
+        if (allowed > prevMax + 0.075) allowed = prevMax + 0.075;
+        if (allowed < 0) allowed = 0;
+        if (allowed > 1) allowed = 1;
+
+        double scale = (desired > 1e-6) ? (allowed / desired) : 0.0;
+        prevMax = allowed;
+
+        lf *= scale; rf *= scale; lb *= scale; rb *= scale;
+
+        // --- Apply powers ---
+        leftFrontDrive.setPower(lf);
+        rightFrontDrive.setPower(rf);
+        leftBackDrive.setPower(lb);
+        rightBackDrive.setPower(rb);
+
+        // --- Telemetry output ---
+        if (faultEventLoopsLeft > 0) {
+            telemetry.addLine(faultEventMsg);
+            faultEventLoopsLeft--;
+        }
+
+        // Persistent status while any motor is failed
+        if (failedCount > 0) {
+            String offline =
+                    (!lfOk ? "Front Left" :
+                            !rfOk ? "Front Right" :
+                                    !lbOk ? "Back Left" :
+                                            "Back Right");
+            telemetry.addLine(offline + " motor is currently offline (fault mode active).");
+        }
+
+        telemetry.addData("DriveVel", "LF %.0f RF %.0f LB %.0f RB %.0f", vLF, vRF, vLB, vRB);
+    }
+
 
     private static class PinpointIO {
         private final Telemetry telemetry;
