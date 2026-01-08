@@ -13,6 +13,16 @@ public class MecanumAuto extends LinearOpMode {
     private DcMotor rightFrontDrive;
     private DcMotor leftBackDrive;
     private DcMotor rightBackDrive;
+    
+    private DcMotor intake;
+
+    private DcMotorEx leftFlyWheel;
+    private DcMotorEx rightFlyWheel;
+/*
+    private Servo tservo;
+    private Servo lspindexerup;
+    private Servo rspindexerup;
+*/
 
     // Same ramp limiter state/behavior as your TeleOp
     private static double prevMax = 0.275;
@@ -28,18 +38,33 @@ public class MecanumAuto extends LinearOpMode {
         rightFrontDrive = hardwareMap.get(DcMotor.class, "frontRightMotor");
         leftBackDrive   = hardwareMap.get(DcMotor.class, "backLeftMotor");
         rightBackDrive  = hardwareMap.get(DcMotor.class, "backRightMotor");
+        
+        intake = hardwareMap.get(DcMotor.class, "intake");
+
+        leftFlyWheel = hardwareMap.get(DcMotorEx.class, "leftFlyWheel"); 
+        rightFlyWheel = hardwareMap.get(DcMotorEx.class, "rightFlyWheel"); 
 
         // ---- Directions (same as your TeleOp) ----
         leftFrontDrive.setDirection(DcMotor.Direction.REVERSE);
         leftBackDrive.setDirection(DcMotor.Direction.REVERSE);
         rightFrontDrive.setDirection(DcMotor.Direction.FORWARD);
         rightBackDrive.setDirection(DcMotor.Direction.FORWARD);
+        
+        intake.setDirection(DcMotor.Direction.FORWARD);
+
+        rightFlyWheel.setDirection(DcMotorEx.Direction.FORWARD);
+        leftFlyWheel.setDirection(DcMotorEx.Direction.REVERSE);
 
         // ---- Run modes (same as your TeleOp) ----
         rightFrontDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         leftFrontDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         leftBackDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         rightBackDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        
+        intake.setDirection(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+
+        leftFlyWheel.setDirection(DcMotorEx.RunMode.RUN_WITH_ENCODER); 
+        rightFlyWheel.setDirection(DcMotorEx.RunMode.RUN_WITH_ENCODER);
 
         // Make sure we're stopped before start
         stopRobot();
@@ -111,5 +136,21 @@ public class MecanumAuto extends LinearOpMode {
         rightFrontDrive.setPower(rightFrontPower);
         leftBackDrive.setPower(leftBackPower);
         rightBackDrive.setPower(rightBackPower);
+    /* Mayhaps will not be helpful 
+    //Did you generate this w Gemini? Just curious because some of the comments seem weird. Anyway, that's quite off-topic. 
+    public void intake() { 
+        intake.setPower(1); 
+    }
+
+    //suggestion for the shoot functioning is to run the intake, and then potentially 
+    //if we have a color sensor do the if-then on that. If we don't have a color sensor then we can just call this when we are either near the april tag or the 
+    //pedropathing visualizer tells us that we are like 1-2 ft away to allow the motor to ramp up. 
+    public void shoot { 
+        leftFlyWheel.setPower(1);
+        rightFlyWheel.setPower(1); 
+
+        //potentially pusher-upper code, but that depends on how the redesign ends up. 
+    } 
+    */
     }
 }
