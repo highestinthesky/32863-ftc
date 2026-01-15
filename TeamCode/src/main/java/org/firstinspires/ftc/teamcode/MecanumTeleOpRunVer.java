@@ -8,10 +8,15 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
+import org.firstinspires.ftc.teamcode.lib.gobilda.GoBildaPinpointDriver;
+import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
+
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
 
-@TeleOp(name="MecanumTeleOpRunVer", group="Test")
+@TeleOp(name="MecanumTeleOpRunVer")
 public class MecanumTeleOpRunVer extends OpMode {
 
     // Drive motors
@@ -26,7 +31,6 @@ public class MecanumTeleOpRunVer extends OpMode {
     private DcMotorEx rightFlyWheel;
     private DcMotorEx rampwheel;
 
-    private Servo tservo;
     private Servo lspindexerup;
     private Servo rspindexerup;
     private double tservoPosition = 0.0;
@@ -42,6 +46,7 @@ public class MecanumTeleOpRunVer extends OpMode {
     double rampwheelOn = 1150;
     double rampwheelOff = 0;
     double rampwheelbackwards = -300;
+
     // Telemetry notice when a motor *first* fails
     private String faultEventMsg = "";
     private int faultEventLoopsLeft = 0;
@@ -117,7 +122,7 @@ public class MecanumTeleOpRunVer extends OpMode {
         rampwheel.setPIDFCoefficients(DcMotorEx.RunMode.RUN_USING_ENCODER, rampwheelcoefficients);
 
         // tservo setup call
-        tservo = hardwareMap.get(Servo.class, "tservo");
+        Servo tservo = hardwareMap.get(Servo.class, "tservo");
         // tservo directions
         tservo.setDirection(Servo.Direction.REVERSE);
 
@@ -147,6 +152,7 @@ public class MecanumTeleOpRunVer extends OpMode {
     @Override
     public void loop() {
         if (stopping) return;
+        pinpoint.update();
 //        int action = 0;
 //        if (gamepad1.bWasPressed()) action = 2;
 //        else if (gamepad1.dpadLeftWasPressed()) action = 3;
@@ -256,8 +262,6 @@ public class MecanumTeleOpRunVer extends OpMode {
             rightFlyWheel.setVelocity(0);
         }
 
-        //temporary controls for the rampwheel
-
         // --- Drive control ---
         double drive  = -gamepad1.left_stick_y;        
         double strafe = -gamepad1.left_stick_x;        
@@ -269,12 +273,14 @@ public class MecanumTeleOpRunVer extends OpMode {
         telemetry.addLine("--------------------------------------");
         telemetry.addData("T-Servo Position", "%.3f", tservoPosition);
         telemetry.addData("Override Mode", overrideMode);
+        telemetry.addData("Odo X (in)", "%.1f", pinpoint.getXInches());
+        telemetry.addData("Odo Y (in)", "%.1f", pinpoint.getYInches());
+        telemetry.addData("Odo H (deg)", "%.1f", Math.toDegrees(pinpoint.getHeadingRadians()));
         telemetry.update();
     }
 
     @Override
     public void stop() {
-        // Optional: ensure everything is off when opmode stops
         stopping = true;
 
         // Stop velocity-controlled motors first
@@ -441,7 +447,7 @@ public class MecanumTeleOpRunVer extends OpMode {
         // --- If a motor JUST failed this loop, create the requested telemetry message ---
         if (!prevLfFailed && lfHealth.failed) {
             faultEventMsg = "Front Left motor is currently offline and the system has adjusted.";
-            faultEventLoopsLeft = 30; // show for ~0.6s at ~50Hz
+            faultEventLoopsLeft = 30;
         } else if (!prevRfFailed && rfHealth.failed) {
             faultEventMsg = "Front Right motor is currently offline and the system has adjusted.";
             faultEventLoopsLeft = 30;
@@ -525,16 +531,34 @@ public class MecanumTeleOpRunVer extends OpMode {
 
         telemetry.addData("DriveVel", "LF %.0f RF %.0f LB %.0f RB %.0f", vLF, vRF, vLB, vRB);
     }
-
-
     private static class PinpointIO {
+
+        private final GoBildaPinpointDriver odo;
         private final Telemetry telemetry;
+
         PinpointIO(HardwareMap hardwareMap, Telemetry telemetry, String deviceName) {
             this.telemetry = telemetry;
+            this.odo = hardwareMap.get(GoBildaPinpointDriver.class, deviceName);
         }
+
         void initializeAndConfigure() {
-            telemetry.addLine("Pinpoint: placeholder (no mock pose)");
+            // MUST be done at init/start while robot is still
+            odo.resetPosAndIMU();
+            telemetry.addLine("Pinpoint initialized");
             telemetry.update();
+        }
+
+        void update() {
+            odo.update();
+        }
+        double getXInches() {
+            return odo.getPosition().getX(DistanceUnit.INCH);
+        }
+        double getYInches() {
+            return odo.getPosition().getY(DistanceUnit.INCH);
+        }
+        double getHeadingRadians() {
+            return odo.getPosition().getHeading(AngleUnit.RADIANS);
         }
     }
 }
