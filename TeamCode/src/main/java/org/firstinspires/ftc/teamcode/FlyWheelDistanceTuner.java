@@ -5,8 +5,9 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
-import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
+import com.qualcomm.robotcore.hardware.Servo;
 
+import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
 
 @TeleOp
 public class FlyWheelDistanceTuner extends OpMode {
@@ -20,6 +21,8 @@ public class FlyWheelDistanceTuner extends OpMode {
     private DcMotorEx leftFlyWheel;
     double curvelocity = 6000;
     boolean high = false;
+    private Servo turrethood;
+    double turrethoodvalue;
 
     public void init() {
         leftFlyWheel = hardwareMap.get(DcMotorEx.class, "lflywheel");
@@ -37,6 +40,8 @@ public class FlyWheelDistanceTuner extends OpMode {
         leftFlyWheel.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         rightFlyWheel.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
 
+        turrethood = hardwareMap.get(Servo.class, "tservo");
+        turrethood.setDirection(Servo.Direction.REVERSE);
     }
 
     public void loop(){
@@ -46,29 +51,33 @@ public class FlyWheelDistanceTuner extends OpMode {
         else if (gamepad1.dpadRightWasPressed()) action = 3;
         else if (gamepad1.dpadUpWasPressed()) action = 4;
         else if (gamepad1.dpadDownWasPressed()) action = 5;
+        else if (gamepad1.yWasPressed()) action = 6;
+        else if (gamepad1.aWasPressed()) action = 7;
         switch (action) {
-//            case 1:
-//                stepIndex = (stepIndex + 1) % stepSizes.length;
-//                break;
-//            case 2:
-//                F -= stepSizes[stepIndex];
-//                break;
-//            case 3:
-//                F += stepSizes[stepIndex];
-//                break;
-//            case 4:
-//                P += stepSizes[stepIndex];
-//                break;
-//            case 5:
-//                P -= stepSizes[stepIndex];
-//                break;
+            case 1:
+                stepIndex = (stepIndex + 1) % stepSizes.length;
+                break;
+            case 2:
+                F -= stepSizes[stepIndex];
+                break;
+            case 3:
+                F += stepSizes[stepIndex];
+                break;
+            case 4:
+                P += stepSizes[stepIndex];
+                break;
+            case 5:
+                P -= stepSizes[stepIndex];
+                break;
+            case 6:
+                if (turrethoodvalue < 1) turrethoodvalue += 0.1;
+                break;
+            case 7:
+                if (turrethoodvalue > 0) turrethoodvalue -= 0.1;
+                break;
+        }
+        turrethood.setPosition(turrethoodvalue);
 
-        }
-        if (gamepad1.y) {
-            high = !high;
-            P = high ? state1 : state2;
-            F = high ? state1 : state2;
-        }
 
         double leftFlyWheelCurrent = leftFlyWheel.getCurrent(CurrentUnit.AMPS);
         double rightFlyWheelCurrent = rightFlyWheel.getCurrent(CurrentUnit.AMPS);
@@ -80,8 +89,9 @@ public class FlyWheelDistanceTuner extends OpMode {
         leftFlyWheel.setVelocity(curvelocity);
         rightFlyWheel.setVelocity(curvelocity);
 
-        telemetry.addData("Total Current", totalCurrent);
-//        telemetry.addData("Stepsize", "%.3f", stepSizes[stepIndex]);
+        telemetry.addData("Total Current (Amps)", totalCurrent);
+        telemetry.addData("Stepsize", "%.3f", stepSizes[stepIndex]);
+        telemetry.addData("hood", turrethoodvalue);
         telemetry.addData("P", P);
         telemetry.addData("F", F);
         telemetry.addData("Left Wheel Velocity", "%.2f", leftFlyWheel.getVelocity());
