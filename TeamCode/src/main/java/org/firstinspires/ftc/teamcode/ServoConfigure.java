@@ -8,29 +8,23 @@ import com.qualcomm.robotcore.hardware.Servo;
 public class ServoConfigure extends OpMode {
     private Servo rightturretturn;
     private Servo leftturretturn;
-    public double rightturretturnvalue;
-    public double leftturretturnvalue;
+    public double turretturnvalue;
 
     @Override
     public void init() {
-        try {
-            rightturretturn = hardwareMap.get(Servo.class, "rightturretturn");
-            rightturretturn.setDirection(Servo.Direction.FORWARD);
-        } catch (IllegalArgumentException ignored) {
-            telemetry.addLine("rightturretturn not found in configuration");
-        }
 
-        leftturretturn = hardwareMap.get(Servo.class, "tservo");
+        rightturretturn = hardwareMap.get(Servo.class, "rightturretturn");
+        leftturretturn = hardwareMap.get(Servo.class, "leftturretturn");
+
         leftturretturn.setDirection(Servo.Direction.FORWARD);
+        rightturretturn.setDirection(Servo.Direction.REVERSE);
 
         telemetry.addLine("init done");
     }
 
     @Override
     public void start() {
-        if (rightturretturn != null) {
-            rightturretturn.setPosition(0);
-        }
+        rightturretturn.setPosition(0);
         leftturretturn.setPosition(0);
     }
 
@@ -42,16 +36,14 @@ public class ServoConfigure extends OpMode {
 
         switch (action) {
             case 3:
-                if (leftturretturnvalue < 1) leftturretturnvalue += 0.1;
+                if (turretturnvalue < 1) turretturnvalue += 0.1;
                 break;
             case 4:
-                if (leftturretturnvalue > 0) leftturretturnvalue -= 0.1;
+                if (turretturnvalue > 0) turretturnvalue -= 0.1;
         }
 
-        if (rightturretturn != null) {
-            rightturretturn.setPosition(rightturretturnvalue);
-        }
-        leftturretturn.setPosition(leftturretturnvalue);
+        rightturretturn.setPosition(turretturnvalue);
+        leftturretturn.setPosition(turretturnvalue);
         telemetry.update();
     }
 }
