@@ -17,7 +17,6 @@ public class ShooterData {
 
     public ShooterData() {}
 
-    /** Add / overwrite a calibration point. */
     public void put(double distanceInches, double targetVelocity) {
         distanceToVelocity.put(distanceInches, targetVelocity);
     }

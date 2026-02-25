@@ -4,12 +4,12 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import org.firstinspires.ftc.teamcode.lib.gobilda.GoBildaPinpointDriver;
-import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
@@ -19,17 +19,18 @@ import org.firstinspires.ftc.robotcore.external.Telemetry;
 @TeleOp(name="MecanumTeleOpRunVer")
 public class MecanumTeleOpRunVer extends OpMode {
 
+    functions ftc_fnc = new functions();
+
     // Drive motors
     private DcMotorEx leftFrontDrive;
     private DcMotorEx rightFrontDrive;
     private DcMotorEx leftBackDrive;
     private DcMotorEx rightBackDrive;
-
     // Other motors/servos
-    private DcMotor intake;
+    private DcMotorEx doubleintake;
     private DcMotorEx leftFlyWheel;
     private DcMotorEx rightFlyWheel;
-    private DcMotorEx rampwheel;
+    private DcMotorEx frontintake;
 
     private Servo lspindexerup;
     private Servo rspindexerup;
@@ -52,14 +53,6 @@ public class MecanumTeleOpRunVer extends OpMode {
     private int faultEventLoopsLeft = 0;
     private boolean stopping = false;
 
-
-
-//    double F = 0;
-//    double P = 0;
-//    double[] stepSizes = {10.0, 1.0, 0.1, 0.001, 0.001};
-//    int stepIndex = 1;
-
-    // Timer for temporary indexer movement
     private ElapsedTime indexerAndRampWheelTimer = new ElapsedTime();
     private boolean indexerAndRampWheelTimerActive = false;
     private boolean overrideMode = false;
@@ -74,52 +67,24 @@ public class MecanumTeleOpRunVer extends OpMode {
         rightFrontDrive = hardwareMap.get(DcMotorEx.class, "frontRightMotor");
         leftBackDrive   = hardwareMap.get(DcMotorEx.class, "backLeftMotor");
         rightBackDrive  = hardwareMap.get(DcMotorEx.class, "backRightMotor");
-        // chassis motors direction
-        leftFrontDrive.setDirection(DcMotor.Direction.REVERSE);
-        leftBackDrive.setDirection(DcMotor.Direction.REVERSE);
-        rightFrontDrive.setDirection(DcMotor.Direction.FORWARD);
-        rightBackDrive.setDirection(DcMotor.Direction.FORWARD);
-        // chassis brake modes
-        leftFrontDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        rightFrontDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        leftBackDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        rightBackDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        // chassis encoder setup
-        rightFrontDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        leftFrontDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        leftBackDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        rightBackDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
         // intake setup call
-        intake = hardwareMap.get(DcMotor.class, "intake");
-        // intake directions setup
-        intake.setDirection(DcMotor.Direction.FORWARD);
-        // intake encoder setup
-        intake.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        doubleintake = hardwareMap.get(DcMotorEx.class, "doubleintake");
+        frontintake = hardwareMap.get(DcMotorEx.class, "frontintake");
 
         // flywheel setup call
         leftFlyWheel = hardwareMap.get(DcMotorEx.class, "lflywheel");
         rightFlyWheel = hardwareMap.get(DcMotorEx.class, "rflywheel");
-        // flywheel directions
-        rightFlyWheel.setDirection(DcMotorEx.Direction.FORWARD);
-        leftFlyWheel.setDirection(DcMotorEx.Direction.REVERSE);
-        // flywheel encoder setup
-        leftFlyWheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        rightFlyWheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        // flywheel PIDF setup
-        PIDFCoefficients pidfCoefficients = new PIDFCoefficients(12,0,0,2);
-        leftFlyWheel.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
-        rightFlyWheel.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
 
-        // rampwheel setup call
-        rampwheel = hardwareMap.get(DcMotorEx.class, "turretturn");
-        // rampwheel directions
-        rampwheel.setDirection(DcMotorEx.Direction.REVERSE);
-        // rampwheel encoder setup
-        rampwheel.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
-        // rampwheel PIDF coefficients setup
-        PIDFCoefficients rampwheelcoefficients = new PIDFCoefficients(4,0,0,20);
-        rampwheel.setPIDFCoefficients(DcMotorEx.RunMode.RUN_USING_ENCODER, rampwheelcoefficients);
+        functions.setupMotors(
+                leftFrontDrive,
+                rightFrontDrive,
+                leftBackDrive,
+                rightBackDrive,
+                leftFlyWheel,
+                rightFlyWheel,
+                doubleintake,
+                frontintake);
 
         // tservo setup call
         Servo tservo = hardwareMap.get(Servo.class, "tservo");
@@ -132,6 +97,7 @@ public class MecanumTeleOpRunVer extends OpMode {
         // spindexerup directions
         lspindexerup.setDirection(Servo.Direction.FORWARD);
         rspindexerup.setDirection(Servo.Direction.FORWARD);
+
 
         // ---- Pinpoint (placeholder) ----
         pinpoint = new PinpointIO(hardwareMap, telemetry, "odo");
@@ -186,16 +152,16 @@ public class MecanumTeleOpRunVer extends OpMode {
 
         // code to change rampwheel to go backwards
         if (overrideMode && gamepad2.right_trigger > 0.1) {
-            rampwheel.setVelocity(rampwheelbackwards);
+            doubleintake.setVelocity(rampwheelbackwards);
         } else if (overrideMode){
-            rampwheel.setVelocity(rampwheelOff);
+            doubleintake.setVelocity(rampwheelOff);
         }
 
         // --- Indexer control + rampWheel control (gamepad2 B) ---
         if (gamepad2.bWasPressed()) {
             PIDFCoefficients rampWheelCoefficients = new PIDFCoefficients(4,0,0,20);
-            rampwheel.setPIDFCoefficients(DcMotorEx.RunMode.RUN_USING_ENCODER, rampWheelCoefficients);
-            rampwheel.setVelocity(rampwheelOn);
+            doubleintake.setPIDFCoefficients(DcMotorEx.RunMode.RUN_USING_ENCODER, rampWheelCoefficients);
+            doubleintake.setVelocity(rampwheelOn);
             curTargetspindexer = basespindexerup;
             indexerAndRampWheelTimer.reset();
             indexerAndRampWheelTimerActive = true;
@@ -204,7 +170,7 @@ public class MecanumTeleOpRunVer extends OpMode {
             curTargetspindexer = basespindexerdown;
         }
         if (indexerAndRampWheelTimerActive && indexerAndRampWheelTimer.seconds() >= 0.8) {
-            rampwheel.setVelocity(rampwheelOff);
+            doubleintake.setVelocity(rampwheelOff);
             indexerAndRampWheelTimerActive = false;
         }
         setServoAngle(lspindexerup, curTargetspindexer);
@@ -243,12 +209,12 @@ public class MecanumTeleOpRunVer extends OpMode {
         // --- Intake (gamepad2 left trigger) ---
         if (gamepad2.left_trigger > 0.1) {
             if (overrideMode) {
-                intake.setPower(-1);
+                doubleintake.setPower(-1);
             } else {
-                intake.setPower(1);
+                doubleintake.setPower(1);
             }
         } else {
-            intake.setPower(0);
+            doubleintake.setPower(0);
         }
         
         if (gamepad2.right_bumper) {
@@ -286,14 +252,14 @@ public class MecanumTeleOpRunVer extends OpMode {
         // Stop velocity-controlled motors first
         safeSetVelocity(leftFlyWheel, 0);
         safeSetVelocity(rightFlyWheel, 0);
-        safeSetVelocity(rampwheel, 0);
+        safeSetVelocity(doubleintake, 0);
 
         // Stop everything else
         safeSetPower(leftFrontDrive, 0);
         safeSetPower(rightFrontDrive, 0);
         safeSetPower(leftBackDrive, 0);
         safeSetPower(rightBackDrive, 0);
-        safeSetPower(intake, 0);
+        safeSetPower(doubleintake, 0);
 
         // In case fault mode set one motor to FLOAT, restore BRAKE
         safeSetZeroPowerBehavior(leftFrontDrive, DcMotor.ZeroPowerBehavior.BRAKE);
