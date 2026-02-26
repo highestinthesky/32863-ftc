@@ -4,6 +4,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
+import com.qualcomm.robotcore.hardware.Servo;
 
 public class functions {
     public static double getMotorExTPS(DcMotorEx motor) {
@@ -17,6 +18,10 @@ public class functions {
         double curTPS2 = getMotorExTPS(flywheel2);
 
     }
+    public static void setServoAngle(Servo servo, double angle) {
+        servo.setPosition(angle / 300.0);
+    }
+
     public static void setupMotors(
             DcMotorEx leftFrontDrive,
             DcMotorEx rightFrontDrive,
