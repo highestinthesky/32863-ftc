@@ -17,8 +17,8 @@ public class MecanumTeleOpTest extends OpMode {
     private DcMotorEx leftBackDrive;
     private DcMotorEx rightBackDrive;
     private FaultTolerantMecanumDrive driveController;
-    private DcMotorEx frontIntake;
-    private DcMotorEx doubleIntake;
+    private DcMotorEx leftIntake;
+    private DcMotorEx rightIntake;
 
     private static final double P = 3.0;
     private static final double I = 0.0;
@@ -40,8 +40,8 @@ public class MecanumTeleOpTest extends OpMode {
         rightFrontDrive = hardwareMap.get(DcMotorEx.class, "frontRightMotor");
         leftBackDrive   = hardwareMap.get(DcMotorEx.class, "backLeftMotor");
         rightBackDrive  = hardwareMap.get(DcMotorEx.class, "backRightMotor");
-        doubleIntake = hardwareMap.get(DcMotorEx.class, "doubleintake");
-        frontIntake = hardwareMap.get(DcMotorEx.class, "frontintake");
+        rightIntake = hardwareMap.get(DcMotorEx.class, "rightintake");
+        leftIntake = hardwareMap.get(DcMotorEx.class, "leftintake");
 
         // chassis motors direction
         leftFrontDrive.setDirection(DcMotor.Direction.REVERSE);
@@ -101,13 +101,8 @@ public class MecanumTeleOpTest extends OpMode {
 
         if (driveController != null) driveController.move(drive, strafe, turn);
 
-        if (gamepad1.right_bumper){
-            frontIntake.setPower(1);
-            doubleIntake.setPower(1);
-        } else {
-            frontIntake.setPower(0);
-            doubleIntake.setPower(0);
-        }
+        leftIntake.setPower(gamepad1.left_trigger);
+        rightIntake.setPower(gamepad1.right_trigger);
         int action = 0;
         if (gamepad1.bWasPressed()) action = 1;
         else if (gamepad1.dpadLeftWasPressed()) action = 2;
@@ -160,8 +155,8 @@ public class MecanumTeleOpTest extends OpMode {
     @Override
     public void stop() {
         if (driveController != null) driveController.stopSafely();
-        FaultTolerantMecanumDrive.MotorSafety.setPower(frontIntake, 0);
-        FaultTolerantMecanumDrive.MotorSafety.setPower(doubleIntake, 0);
+        FaultTolerantMecanumDrive.MotorSafety.setPower(leftIntake, 0);
+        FaultTolerantMecanumDrive.MotorSafety.setPower(rightIntake, 0);
         FaultTolerantMecanumDrive.MotorSafety.setVelocity(leftFlyWheel, 0);
         FaultTolerantMecanumDrive.MotorSafety.setVelocity(rightFlyWheel, 0);
     }
