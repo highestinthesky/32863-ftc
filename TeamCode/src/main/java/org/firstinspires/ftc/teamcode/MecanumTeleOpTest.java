@@ -4,6 +4,7 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
 
@@ -68,11 +69,13 @@ public class MecanumTeleOpTest extends OpMode {
                 rightBackDrive,
                 telemetry);
 
+        leftIntake.setDirection(DcMotorSimple.Direction.REVERSE);
+
         leftFlyWheel = hardwareMap.get(DcMotorEx.class, "lflywheel");
         rightFlyWheel = hardwareMap.get(DcMotorEx.class, "rflywheel");
         // flywheel directions
         rightFlyWheel.setDirection(DcMotorEx.Direction.REVERSE);
-        leftFlyWheel.setDirection(DcMotorEx.Direction.FORWARD);
+        leftFlyWheel.setDirection( DcMotorEx.Direction.FORWARD);
         // flywheel encoder setup
         leftFlyWheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         rightFlyWheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
@@ -101,12 +104,13 @@ public class MecanumTeleOpTest extends OpMode {
 
         if (driveController != null) driveController.move(drive, strafe, turn);
 
-        leftIntake.setPower(gamepad1.left_trigger);
-        rightIntake.setPower(gamepad1.right_trigger);
+
         int action = 0;
         if (gamepad1.bWasPressed()) action = 1;
         else if (gamepad1.dpadLeftWasPressed()) action = 2;
         else if (gamepad1.dpadRightWasPressed()) action = 3;
+        else if (gamepad1.left_trigger > 0.4) action = 4;
+        else if (gamepad1.right_trigger > 0.4) action = 5;
         else if (gamepad1.yWasPressed()) action = 6;
         else if (gamepad1.aWasPressed()) action = 7;
 
@@ -120,6 +124,10 @@ public class MecanumTeleOpTest extends OpMode {
             case 3:
                 curvelocity += stepSizes[stepIndex];
                 break;
+            case 4:
+                leftIntake.setVelocity(1150);
+            case 5:
+                rightIntake.setVelocity(1150);
             case 6:
                 if (turrethoodvalue < 1) turrethoodvalue += 0.1;
                 break;
@@ -132,7 +140,7 @@ public class MecanumTeleOpTest extends OpMode {
             curvelocity = 6000;
         }
 
-        turrethoodvalue = Math.max(0.0, Math.min(1.0, turrethoodvalue));
+    turrethoodvalue = Math.max(0.0, Math.min(1.0, turrethoodvalue));
         turrethood.setPosition(turrethoodvalue);
 
         leftFlyWheel.setVelocity(curvelocity);
