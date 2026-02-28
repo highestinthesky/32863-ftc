@@ -18,11 +18,17 @@ public class ShotControlConfig {
     public double flywheelSpinupTimeoutSeconds = 1.25;
 
     // Turret auto-aim tune values (CR servo, no absolute position sensor).
-    public double turretAimKp = 0.04;
-    public double turretAimDeadbandDegrees = 1.0;
-    public double turretAimMaxPower = 0.30;
+    public double turretAimKp = 0.018;
+    public double turretAimDeadbandDegrees = 1.8;
+    public double turretAimMaxPower = 0.12;
+    public double turretAimSlewRatePerSecond = 1.0;
     public double turretAimDirection = 1.0;
-    public double turretAimTimeoutSeconds = 0.90;
+    public double turretAimTimeoutSeconds = 1.60;
+    public int turretCenteredFramesRequired = 4;
+    public int turretTagLossAbortFrames = 60; // target range: 50-70 frames
+    public double turretLostTagFallbackTxDecayPerFrame = 0.98;
+    public boolean turretEnableSpinupCorrections = true;
+    public double preFeedMaxTxDegrees = 2.2;
 
     public double turretReturnPower = 0.25;
     public double turretReturnStopThreshold = 0.02;

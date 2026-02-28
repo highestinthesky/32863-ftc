@@ -64,14 +64,19 @@ public class TurretCrServoController {
         aimAttemptTimer.reset();
         aimAttemptActive = true;
         returningHome = false;
+        lastAppliedPower = 0.0;
         status = "Aiming";
     }
 
     public AimResult aimToTx(double txDegrees, double dtSeconds, ShotControlConfig config) {
+        return aimToTx(txDegrees, dtSeconds, config, true);
+    }
+
+    public AimResult aimToTx(double txDegrees, double dtSeconds, ShotControlConfig config, boolean enforceTimeout) {
         if (!available) return AimResult.UNAVAILABLE;
         if (!aimAttemptActive) beginAimAttempt();
 
-        if (aimAttemptTimer.seconds() > config.turretAimTimeoutSeconds) {
+        if (enforceTimeout && aimAttemptTimer.seconds() > config.turretAimTimeoutSeconds) {
             applyTurnCommand(0.0, dtSeconds, false);
             status = "Aim timeout";
             return AimResult.TIMEOUT;
@@ -83,8 +88,9 @@ public class TurretCrServoController {
             return AimResult.CENTERED;
         }
 
-        double command = txDegrees * config.turretAimKp * config.turretAimDirection;
-        command = functions.clamp(command, -Math.abs(config.turretAimMaxPower), Math.abs(config.turretAimMaxPower));
+        double targetCommand = txDegrees * config.turretAimKp * config.turretAimDirection;
+        targetCommand = functions.clamp(targetCommand, -Math.abs(config.turretAimMaxPower), Math.abs(config.turretAimMaxPower));
+        double command = rateLimitCommand(targetCommand, dtSeconds, config);
         applyTurnCommand(command, dtSeconds, true);
         status = String.format("Aiming tx=%.2f pwr=%.2f", txDegrees, command);
         return AimResult.AIMING;
@@ -94,6 +100,7 @@ public class TurretCrServoController {
         if (!available) return;
         returningHome = true;
         aimAttemptActive = false;
+        lastAppliedPower = 0.0;
         status = "Returning home";
     }
 
@@ -138,6 +145,15 @@ public class TurretCrServoController {
         if (trackOffset && dtSeconds > 0.0) {
             estimatedTurnOffset += power * dtSeconds;
         }
+    }
+
+    private double rateLimitCommand(double targetCommand, double dtSeconds, ShotControlConfig config) {
+        if (config == null) return targetCommand;
+        double safeDt = dtSeconds > 0.0 ? dtSeconds : 0.02;
+        double maxDelta = Math.abs(config.turretAimSlewRatePerSecond) * safeDt;
+        double lower = lastAppliedPower - maxDelta;
+        double upper = lastAppliedPower + maxDelta;
+        return functions.clamp(targetCommand, lower, upper);
     }
 
     private void setPower(double power) {

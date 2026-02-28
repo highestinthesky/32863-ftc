@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 
 import org.firstinspires.ftc.teamcode.shooter.AutoShotSequenceController;
@@ -109,6 +110,7 @@ public class BlueTeleOp extends OpMode {
                 rightintake,
                 leftintake
         );
+        leftintake.setDirection(DcMotorSimple.Direction.REVERSE);
 
         driveController = new FaultTolerantMecanumDrive(
                 leftFrontDrive,

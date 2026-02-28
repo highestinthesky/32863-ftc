@@ -53,6 +53,12 @@ public class AutoShotSequenceController {
     private double targetVelocity = 0.0;
     private double commandedFlywheelVelocity = 0.0;
 
+    private int lostTagFrameCount = 0;
+    private int centeredFrameCount = 0;
+    private Double lastSeenTxDegrees = null;
+    private Double lostTagFallbackTxDegrees = null;
+    private boolean usingFallbackTx = false;
+
     public AutoShotSequenceController(
             DcMotorEx leftFlyWheel,
             DcMotorEx rightFlyWheel,
@@ -95,7 +101,7 @@ public class AutoShotSequenceController {
                 handleAim(dt);
                 break;
             case SPINUP:
-                handleSpinup();
+                handleSpinup(dt);
                 break;
             case FEED_TWO:
                 handleFeedTwo();
@@ -176,6 +182,10 @@ public class AutoShotSequenceController {
         telemetry.addData("AutoShot tx (deg)", targetTxDegrees == null ? "n/a" : String.format("%.2f", targetTxDegrees));
         telemetry.addData("AutoShot Target Vel", "%.1f", targetVelocity);
         telemetry.addData("AutoShot Cmd Vel", "%.1f", commandedFlywheelVelocity);
+        telemetry.addData("Aim Lost Frames", "%d/%d", lostTagFrameCount, config.turretTagLossAbortFrames);
+        telemetry.addData("Aim Centered Frames", "%d/%d", centeredFrameCount, config.turretCenteredFramesRequired);
+        telemetry.addData("Aim Fallback", usingFallbackTx);
+        telemetry.addData("Aim Last tx", lastSeenTxDegrees == null ? "n/a" : String.format("%.2f", lastSeenTxDegrees));
         telemetry.addData("Compensator", compensator.getStatus());
         if (turret != null) {
             telemetry.addData("Turret Status", turret.getStatus());
@@ -193,6 +203,11 @@ public class AutoShotSequenceController {
         targetVelocity = 0.0;
         commandedFlywheelVelocity = config.flywheelIdleVelocity;
         readyWindowActive = false;
+        lostTagFrameCount = 0;
+        centeredFrameCount = 0;
+        lastSeenTxDegrees = null;
+        lostTagFallbackTxDegrees = null;
+        usingFallbackTx = false;
         enterState(State.ACQUIRE_TAG);
         status = sequenceType == SequenceType.TWO_BALL ? "2-ball requested" : "3-ball requested";
     }
@@ -210,6 +225,11 @@ public class AutoShotSequenceController {
         targetDistanceInches = targeting.getDistanceInches();
         targetTxDegrees = targeting.getTagTxDegrees();
         targetVelocity = Math.max(0.0, targeting.getTargetVelocity());
+        lastSeenTxDegrees = targetTxDegrees;
+        lostTagFrameCount = 0;
+        centeredFrameCount = 0;
+        lostTagFallbackTxDegrees = null;
+        usingFallbackTx = false;
 
         if (turret == null || !turret.isAvailable()) {
             abortSequence("Turret unavailable");
@@ -226,36 +246,97 @@ public class AutoShotSequenceController {
         stopIntakes();
 
         targeting.update();
-        if (!targeting.isTargetAvailable()) {
-            abortSequence("Lost alliance goal tag while aiming");
-            return;
+        Double aimTxDegrees;
+        if (targeting.isTargetAvailable()) {
+            targetDistanceInches = targeting.getDistanceInches();
+            targetTxDegrees = targeting.getTagTxDegrees();
+            targetVelocity = Math.max(0.0, targeting.getTargetVelocity());
+            aimTxDegrees = targetTxDegrees;
+            lastSeenTxDegrees = targetTxDegrees;
+            lostTagFrameCount = 0;
+            lostTagFallbackTxDegrees = null;
+            usingFallbackTx = false;
+        } else {
+            lostTagFrameCount++;
+            usingFallbackTx = true;
+            if (lostTagFallbackTxDegrees == null) {
+                lostTagFallbackTxDegrees = lastSeenTxDegrees != null ? lastSeenTxDegrees : 0.0;
+            }
+            aimTxDegrees = lostTagFallbackTxDegrees;
+            lostTagFallbackTxDegrees = lostTagFallbackTxDegrees * config.turretLostTagFallbackTxDecayPerFrame;
+
+            if (lostTagFrameCount >= config.turretTagLossAbortFrames) {
+                abortSequence(String.format("Lost goal tag > %d frames while aiming", config.turretTagLossAbortFrames));
+                return;
+            }
         }
 
-        targetDistanceInches = targeting.getDistanceInches();
-        targetTxDegrees = targeting.getTagTxDegrees();
-        targetVelocity = Math.max(0.0, targeting.getTargetVelocity());
-
-        Double tx = targetTxDegrees;
-        if (tx == null) {
+        if (aimTxDegrees == null) {
             abortSequence("Tag tx unavailable");
             return;
         }
 
-        TurretCrServoController.AimResult aimResult = turret.aimToTx(tx, dtSeconds, config);
+        TurretCrServoController.AimResult aimResult = turret.aimToTx(aimTxDegrees, dtSeconds, config, true);
         if (aimResult == TurretCrServoController.AimResult.CENTERED) {
-            enterState(State.SPINUP);
-            status = "Turret centered";
+            centeredFrameCount++;
+            if (centeredFrameCount >= config.turretCenteredFramesRequired) {
+                enterState(State.SPINUP);
+                status = "Turret centered stable";
+            } else {
+                status = String.format("Centered verify %d/%d", centeredFrameCount, config.turretCenteredFramesRequired);
+            }
         } else if (aimResult == TurretCrServoController.AimResult.TIMEOUT) {
             abortSequence("Turret aim timeout");
         } else if (aimResult == TurretCrServoController.AimResult.UNAVAILABLE) {
             abortSequence("Turret unavailable");
         } else {
-            status = "Aiming turret";
+            centeredFrameCount = 0;
+            if (usingFallbackTx) {
+                status = String.format("Aiming fallback (%d/%d lost frames)", lostTagFrameCount, config.turretTagLossAbortFrames);
+            } else {
+                status = "Aiming turret";
+            }
         }
     }
 
-    private void handleSpinup() {
+    private void handleSpinup(double dtSeconds) {
         stopIntakes();
+
+        if (config.turretEnableSpinupCorrections && turret != null && turret.isAvailable()) {
+            targeting.update();
+            Double spinupTxDegrees;
+            if (targeting.isTargetAvailable()) {
+                targetDistanceInches = targeting.getDistanceInches();
+                targetTxDegrees = targeting.getTagTxDegrees();
+                targetVelocity = Math.max(0.0, targeting.getTargetVelocity());
+                spinupTxDegrees = targetTxDegrees;
+                lastSeenTxDegrees = targetTxDegrees;
+                lostTagFrameCount = 0;
+                lostTagFallbackTxDegrees = null;
+                usingFallbackTx = false;
+            } else {
+                lostTagFrameCount++;
+                usingFallbackTx = true;
+                if (lostTagFallbackTxDegrees == null) {
+                    lostTagFallbackTxDegrees = lastSeenTxDegrees != null ? lastSeenTxDegrees : 0.0;
+                }
+                spinupTxDegrees = lostTagFallbackTxDegrees;
+                lostTagFallbackTxDegrees = lostTagFallbackTxDegrees * config.turretLostTagFallbackTxDecayPerFrame;
+                if (lostTagFrameCount >= config.turretTagLossAbortFrames) {
+                    abortSequence(String.format("Lost goal tag > %d frames during spinup", config.turretTagLossAbortFrames));
+                    return;
+                }
+            }
+
+            if (spinupTxDegrees != null) {
+                TurretCrServoController.AimResult spinupAim = turret.aimToTx(spinupTxDegrees, dtSeconds, config, false);
+                if (spinupAim == TurretCrServoController.AimResult.UNAVAILABLE) {
+                    abortSequence("Turret unavailable during spinup");
+                    return;
+                }
+            }
+        }
+
         commandedFlywheelVelocity = computeCommandedVelocity();
         setFlywheelVelocity(commandedFlywheelVelocity);
 
@@ -278,6 +359,13 @@ public class AutoShotSequenceController {
         boolean settleMet = readyWindowActive && readyTimer.seconds() >= config.flywheelReadySettleSeconds;
         boolean timeoutMet = stateTimer.seconds() >= config.flywheelSpinupTimeoutSeconds;
         if (settleMet || timeoutMet) {
+            if (requiresPreFeedRealign()) {
+                centeredFrameCount = 0;
+                if (turret != null && turret.isAvailable()) turret.beginAimAttempt();
+                enterState(State.AIM);
+                status = "Re-aim before feed";
+                return;
+            }
             enterState(activeSequence == SequenceType.THREE_BALL ? State.FEED_THREE_BACKOFF : State.FEED_TWO);
             status = settleMet ? "Spinup ready" : "Spinup timeout fallback";
         } else {
@@ -368,6 +456,9 @@ public class AutoShotSequenceController {
     private void enterState(State newState) {
         state = newState;
         stateTimer.reset();
+        if (newState == State.AIM) {
+            centeredFrameCount = 0;
+        }
         if (newState == State.SPINUP) {
             readyWindowActive = false;
         }
@@ -405,5 +496,12 @@ public class AutoShotSequenceController {
     private void setIntakeVelocity(double rightFrontVelocity, double leftTransferVelocity) {
         if (rightIntakeFront != null) rightIntakeFront.setVelocity(rightFrontVelocity);
         if (leftIntakeTransfer != null) leftIntakeTransfer.setVelocity(leftTransferVelocity);
+    }
+
+    private boolean requiresPreFeedRealign() {
+        if (usingFallbackTx) return true;
+        Double tx = targetTxDegrees != null ? targetTxDegrees : lastSeenTxDegrees;
+        if (tx == null) return true;
+        return Math.abs(tx) > config.preFeedMaxTxDegrees;
     }
 }
