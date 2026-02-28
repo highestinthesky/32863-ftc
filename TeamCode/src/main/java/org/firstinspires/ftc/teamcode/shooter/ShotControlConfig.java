@@ -22,10 +22,14 @@ public class ShotControlConfig {
     public double turretAimDeadbandDegrees = 2.8;
     public double turretAimMaxPower = 0.12;
     public double turretAimSlewRatePerSecond = 1.0;
+    public double turretAimCoarseTxThresholdDegrees = 8.0;
+    public double turretAimCoarseKp = 0.024;
+    public double turretAimCoarseMaxPower = 0.22;
+    public double turretAimCoarseSlewRatePerSecond = 3.0;
     public double turretAimDirection = 1.0;
     public double turretAimTimeoutSeconds = 3.50;
     public int turretCenteredFramesRequired = 1;
-    public int turretLockFramesRequired = 60; // target range: 50-70 frames
+    public int turretLockFramesRequired = 12; // shorter lock for faster transition
     public double turretLockWindowDegrees = 5.0;
     public int turretTagLossAbortFrames = 60; // target range: 50-70 frames
     public double turretLostTagFallbackTxDecayPerFrame = 0.94;
@@ -34,6 +38,7 @@ public class ShotControlConfig {
     public double turretAimNearCenterOnTimeoutDegrees = 3.0;
     public boolean turretEnableSpinupCorrections = true;
     public double preFeedMaxTxDegrees = 2.5;
+    public boolean enableFlywheelSpinupDuringAim = true;
 
     public double turretReturnPower = 0.18;
     public double turretReturnMinPower = 0.05;

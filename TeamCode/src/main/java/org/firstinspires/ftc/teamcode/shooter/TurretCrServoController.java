@@ -88,13 +88,18 @@ public class TurretCrServoController {
             return AimResult.CENTERED;
         }
 
-        double targetCommand = txDegrees * config.turretAimKp * config.turretAimDirection;
-        targetCommand = functions.clamp(targetCommand, -Math.abs(config.turretAimMaxPower), Math.abs(config.turretAimMaxPower));
-        double command = rateLimitCommand(targetCommand, dtSeconds, config);
+        boolean coarseAim = Math.abs(txDegrees) >= Math.abs(config.turretAimCoarseTxThresholdDegrees);
+        double kp = coarseAim ? config.turretAimCoarseKp : config.turretAimKp;
+        double maxPower = coarseAim ? config.turretAimCoarseMaxPower : config.turretAimMaxPower;
+        double slewRate = coarseAim ? config.turretAimCoarseSlewRatePerSecond : config.turretAimSlewRatePerSecond;
+
+        double targetCommand = txDegrees * kp * config.turretAimDirection;
+        targetCommand = functions.clamp(targetCommand, -Math.abs(maxPower), Math.abs(maxPower));
+        double command = rateLimitCommand(targetCommand, dtSeconds, slewRate);
         boolean trackHomeOffset = Math.abs(txDegrees) >= Math.abs(config.turretHomeOffsetTrackTxThresholdDegrees)
                 && Math.abs(command) >= Math.abs(config.turretHomeOffsetTrackPowerThreshold);
         applyTurnCommand(command, dtSeconds, trackHomeOffset, config);
-        status = String.format("Aiming tx=%.2f pwr=%.2f", txDegrees, command);
+        status = String.format("Aiming %s tx=%.2f pwr=%.2f", coarseAim ? "coarse" : "fine", txDegrees, command);
         return AimResult.AIMING;
     }
 
@@ -190,10 +195,9 @@ public class TurretCrServoController {
         }
     }
 
-    private double rateLimitCommand(double targetCommand, double dtSeconds, ShotControlConfig config) {
-        if (config == null) return targetCommand;
+    private double rateLimitCommand(double targetCommand, double dtSeconds, double slewRatePerSecond) {
         double safeDt = dtSeconds > 0.0 ? dtSeconds : 0.02;
-        double maxDelta = Math.abs(config.turretAimSlewRatePerSecond) * safeDt;
+        double maxDelta = Math.abs(slewRatePerSecond) * safeDt;
         double lower = lastAppliedPower - maxDelta;
         double upper = lastAppliedPower + maxDelta;
         return functions.clamp(targetCommand, lower, upper);

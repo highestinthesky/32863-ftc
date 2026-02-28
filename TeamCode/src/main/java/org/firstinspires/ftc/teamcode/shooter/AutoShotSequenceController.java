@@ -253,7 +253,6 @@ public class AutoShotSequenceController {
     }
 
     private void handleAim(double dtSeconds) {
-        setFlywheelVelocity(config.flywheelIdleVelocity);
         stopIntakes();
 
         targeting.update();
@@ -290,6 +289,13 @@ public class AutoShotSequenceController {
         if (aimTxDegrees == null) {
             abortSequence("Tag tx unavailable");
             return;
+        }
+
+        if (config.enableFlywheelSpinupDuringAim && targetVelocity > 0.0) {
+            commandedFlywheelVelocity = computeCommandedVelocity();
+            setFlywheelVelocity(commandedFlywheelVelocity);
+        } else {
+            setFlywheelVelocity(config.flywheelIdleVelocity);
         }
 
         boolean enforceAimTimeout = !usingFallbackTx && lockFrameCount < config.turretLockFramesRequired;
