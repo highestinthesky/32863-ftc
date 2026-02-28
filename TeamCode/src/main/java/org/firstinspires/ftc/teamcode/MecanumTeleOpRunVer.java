@@ -205,9 +205,9 @@ public class MecanumTeleOpRunVer extends OpMode {
 
     private void updateFlywheelCommand() {
         if (gamepad2.right_bumper) {
-            functions.setDualVelocity(leftFlyWheel, rightFlyWheel, activeFlywheelTargetVelocity);
+            functions.setTwoMotorsVelocity(leftFlyWheel, rightFlyWheel, activeFlywheelTargetVelocity);
         } else {
-            functions.setDualVelocity(leftFlyWheel, rightFlyWheel, 0.0);
+            functions.setTwoMotorsVelocity(leftFlyWheel, rightFlyWheel, 0.0);
         }
     }
 

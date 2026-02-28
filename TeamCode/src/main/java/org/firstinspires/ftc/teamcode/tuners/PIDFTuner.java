@@ -8,8 +8,8 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
 
 
-@TeleOp(name = "FlyWheelTuner", group = "Tuners")
-public class FlyWheelTuner extends OpMode {
+@TeleOp(name = "PIDFTuner", group = "Tuners")
+public class PIDFTuner extends OpMode {
 
     double F = 0;
     double P = 0;
@@ -23,8 +23,8 @@ public class FlyWheelTuner extends OpMode {
     double curvelocity = 6000;
 
     public void init() {
-        leftFlyWheel = hardwareMap.get(DcMotorEx.class, "lflywheel");
-        rightFlyWheel = hardwareMap.get(DcMotorEx.class, "rflywheel");
+        leftFlyWheel = hardwareMap.get(DcMotorEx.class, "leftintake");
+        rightFlyWheel = hardwareMap.get(DcMotorEx.class, "rightintake");
         // flywheel directions
         rightFlyWheel.setDirection(DcMotorEx.Direction.FORWARD);
         leftFlyWheel.setDirection(DcMotorEx.Direction.REVERSE);

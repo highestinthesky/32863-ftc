@@ -68,7 +68,7 @@ public class functions {
         rampWheelMotor.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, newRampWheelPidf());
     }
 
-    public static void setDualVelocity(DcMotorEx motorA, DcMotorEx motorB, double velocity) {
+    public static void setTwoMotorsVelocity(DcMotorEx motorA, DcMotorEx motorB, double velocity) {
         if (motorA != null) motorA.setVelocity(velocity);
         if (motorB != null) motorB.setVelocity(velocity);
     }
@@ -133,7 +133,7 @@ public class functions {
         rightintake.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
         leftintake.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
 
-        PIDFCoefficients intakePidf = new PIDFCoefficients(0, 0, 0, 0);
+        PIDFCoefficients intakePidf = new PIDFCoefficients(6, 0, 0, 4);
         rightintake.setPIDFCoefficients(DcMotorEx.RunMode.RUN_USING_ENCODER, intakePidf);
         leftintake.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, intakePidf);
     }
