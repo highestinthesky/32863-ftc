@@ -12,7 +12,7 @@ package org.firstinspires.ftc.teamcode.shooter;
  * - Consecutive-shot compensation thresholds and gains
  */
 public class ShotControlConfig {
-    public double flywheelIdleVelocity = 3000.0;
+    public double flywheelIdleVelocity = 2000.0;
     public double flywheelReadyTolerance = 180.0;
     public double flywheelReadySettleSeconds = 0.15;
     public double flywheelSpinupTimeoutSeconds = 1.25;
@@ -29,7 +29,7 @@ public class ShotControlConfig {
     public double turretReturnTimeoutSeconds = 1.20;
 
     // 2-ball sequence: transfer-only.
-    public double twoShotTransferVelocity = 1100.0;
+    public double twoShotTransferVelocity = 6000.0;
     public double twoShotTransferDurationSeconds = 0.70;
 
     // 3-ball sequence: transfer backoff then both forward.

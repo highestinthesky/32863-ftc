@@ -70,13 +70,13 @@ public class ShooterData {
         ShooterData data = new ShooterData();
 
         // TODO: Replace with real tuned points (distance inches, velocity units you use).
-        data.put(24.5, 1600);
-        data.put(30, 1750);
-        data.put(36, 1850);
-        data.put(42, 1950);
-        data.put(48, 2050);
-        data.put(54, 2150);
-        data.put(60, 2250);
+        data.put(24.5, 2000);
+        data.put(30, 2400);
+        data.put(36, 2800);
+        data.put(42, 3300);
+        data.put(48, 3700);
+        data.put(54, 4100);
+        data.put(60, 4500);
 
         return data;
     }
