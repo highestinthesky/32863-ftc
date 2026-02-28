@@ -60,6 +60,7 @@ public class AutoShotSequenceController {
     private boolean usingFallbackTx = false;
     private boolean abortRequiresReturnHome = false;
     private State abortFromState = State.IDLE;
+    private int aimTimeoutRetryCount = 0;
 
     public AutoShotSequenceController(
             DcMotorEx leftFlyWheel,
@@ -186,6 +187,7 @@ public class AutoShotSequenceController {
         telemetry.addData("AutoShot Cmd Vel", "%.1f", commandedFlywheelVelocity);
         telemetry.addData("Aim Lost Frames", "%d/%d", lostTagFrameCount, config.turretTagLossAbortFrames);
         telemetry.addData("Aim Centered Frames", "%d/%d", centeredFrameCount, config.turretCenteredFramesRequired);
+        telemetry.addData("Aim Timeout Retries", "%d/%d", aimTimeoutRetryCount, config.turretAimTimeoutRetryLimit);
         telemetry.addData("Aim Fallback", usingFallbackTx);
         telemetry.addData("Aim Last tx", lastSeenTxDegrees == null ? "n/a" : String.format("%.2f", lastSeenTxDegrees));
         telemetry.addData("Compensator", compensator.getStatus());
@@ -212,6 +214,7 @@ public class AutoShotSequenceController {
         usingFallbackTx = false;
         abortRequiresReturnHome = false;
         abortFromState = State.IDLE;
+        aimTimeoutRetryCount = 0;
         enterState(State.ACQUIRE_TAG);
         status = sequenceType == SequenceType.TWO_BALL ? "2-ball requested" : "3-ball requested";
     }
@@ -290,13 +293,34 @@ public class AutoShotSequenceController {
         if (aimResult == TurretCrServoController.AimResult.CENTERED) {
             centeredFrameCount++;
             if (centeredFrameCount >= config.turretCenteredFramesRequired) {
+                aimTimeoutRetryCount = 0;
                 enterState(State.SPINUP);
                 status = "Turret centered stable";
             } else {
                 status = String.format("Centered verify %d/%d", centeredFrameCount, config.turretCenteredFramesRequired);
             }
         } else if (aimResult == TurretCrServoController.AimResult.TIMEOUT) {
-            abortSequence("Turret aim timeout");
+            if (Math.abs(aimTxDegrees) <= config.turretAimNearCenterOnTimeoutDegrees) {
+                aimTimeoutRetryCount = 0;
+                enterState(State.SPINUP);
+                status = String.format("Aim timeout near-center (tx=%.2f)", aimTxDegrees);
+            } else if (aimTimeoutRetryCount < config.turretAimTimeoutRetryLimit) {
+                aimTimeoutRetryCount++;
+                centeredFrameCount = 0;
+                turret.beginAimAttempt();
+                status = String.format(
+                        "Aim timeout retry %d/%d (tx=%.2f)",
+                        aimTimeoutRetryCount,
+                        config.turretAimTimeoutRetryLimit,
+                        aimTxDegrees
+                );
+            } else {
+                abortSequence(String.format(
+                        "Turret aim timeout after %d retries (tx=%.2f)",
+                        config.turretAimTimeoutRetryLimit,
+                        aimTxDegrees
+                ));
+            }
         } else if (aimResult == TurretCrServoController.AimResult.UNAVAILABLE) {
             abortSequence("Turret unavailable");
         } else {
@@ -496,7 +520,9 @@ public class AutoShotSequenceController {
             readyWindowActive = false;
         }
         if (newState == State.RETURN_HOME && turret != null && turret.isAvailable()) {
-            turret.clampEstimatedTurnOffset(config.turretReturnMaxEstimatedOffset);
+            if (!abortReason.isEmpty()) {
+                turret.clampEstimatedTurnOffset(config.turretReturnMaxEstimatedOffset);
+            }
             turret.startReturnHome();
         }
     }

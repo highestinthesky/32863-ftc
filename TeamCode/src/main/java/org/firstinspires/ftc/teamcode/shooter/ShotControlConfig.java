@@ -19,23 +19,25 @@ public class ShotControlConfig {
 
     // Turret auto-aim tune values (CR servo, no absolute position sensor).
     public double turretAimKp = 0.016;
-    public double turretAimDeadbandDegrees = 2.0;
+    public double turretAimDeadbandDegrees = 2.8;
     public double turretAimMaxPower = 0.12;
     public double turretAimSlewRatePerSecond = 1.0;
     public double turretAimDirection = 1.0;
     public double turretAimTimeoutSeconds = 3.50;
-    public int turretCenteredFramesRequired = 2;
+    public int turretCenteredFramesRequired = 1;
     public int turretTagLossAbortFrames = 60; // target range: 50-70 frames
     public double turretLostTagFallbackTxDecayPerFrame = 0.94;
     public double turretLostTagFallbackTxMaxDegrees = 10.0;
+    public int turretAimTimeoutRetryLimit = 3;
+    public double turretAimNearCenterOnTimeoutDegrees = 3.0;
     public boolean turretEnableSpinupCorrections = true;
     public double preFeedMaxTxDegrees = 2.5;
 
-    public double turretReturnPower = 0.14;
-    public double turretReturnKp = 1.6;
-    public double turretReturnMaxEstimatedOffset = 0.45;
+    public double turretReturnPower = 0.18;
+    public double turretReturnKp = 2.1;
+    public double turretReturnMaxEstimatedOffset = 1.20;
     public double turretReturnStopThreshold = 0.02;
-    public double turretReturnTimeoutSeconds = 1.20;
+    public double turretReturnTimeoutSeconds = 2.00;
 
     // 2-ball sequence: transfer-only.
     public double twoShotTransferVelocity = 6000.0;
