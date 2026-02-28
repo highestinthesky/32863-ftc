@@ -138,7 +138,7 @@ public class AutoShotSequenceController {
     public void stopAll() {
         state = State.IDLE;
         activeSequence = SequenceType.NONE;
-        stopIntakes();
+        forceStopIntakes();
         setFlywheelVelocity(0.0);
         if (turret != null) turret.stop();
         status = "Stopped";
@@ -224,7 +224,6 @@ public class AutoShotSequenceController {
 
     private void handleAcquireTag() {
         setFlywheelVelocity(config.flywheelIdleVelocity);
-        stopIntakes();
 
         targeting.update();
         if (!targeting.isTargetAvailable()) {
@@ -253,8 +252,6 @@ public class AutoShotSequenceController {
     }
 
     private void handleAim(double dtSeconds) {
-        stopIntakes();
-
         targeting.update();
         Double aimTxDegrees;
         if (targeting.isTargetAvailable()) {
@@ -363,8 +360,6 @@ public class AutoShotSequenceController {
     }
 
     private void handleSpinup(double dtSeconds) {
-        stopIntakes();
-
         boolean spinupVisionLost = false;
         if (config.turretEnableSpinupCorrections && turret != null && turret.isAvailable()) {
             targeting.update();
@@ -450,7 +445,6 @@ public class AutoShotSequenceController {
         commandedFlywheelVelocity = computeCommandedVelocity();
         setFlywheelVelocity(commandedFlywheelVelocity);
 
-        setIntakeVelocity(0.0, config.twoShotTransferVelocity);
         if (stateTimer.seconds() >= config.twoShotTransferDurationSeconds) {
             enterState(State.RETURN_HOME);
             status = "2-ball feed complete";
@@ -463,7 +457,6 @@ public class AutoShotSequenceController {
         commandedFlywheelVelocity = computeCommandedVelocity();
         setFlywheelVelocity(commandedFlywheelVelocity);
 
-        setIntakeVelocity(0.0, config.threeShotTransferBackoffVelocity);
         if (stateTimer.seconds() >= config.threeShotTransferBackoffDurationSeconds) {
             enterState(State.FEED_THREE_FORWARD);
             status = "3-ball backoff complete";
@@ -476,8 +469,6 @@ public class AutoShotSequenceController {
         commandedFlywheelVelocity = computeCommandedVelocity();
         setFlywheelVelocity(commandedFlywheelVelocity);
 
-        // TODO (HUGE): tune front vs transfer velocities and timing for reliable 3-ball feed.
-        setIntakeVelocity(config.threeShotFrontForwardVelocity, config.threeShotTransferForwardVelocity);
         if (stateTimer.seconds() >= config.threeShotForwardDurationSeconds) {
             enterState(State.RETURN_HOME);
             status = "3-ball feed complete";
@@ -487,7 +478,6 @@ public class AutoShotSequenceController {
     }
 
     private void handleReturnHome(double dtSeconds) {
-        stopIntakes();
         setFlywheelVelocity(config.flywheelIdleVelocity);
 
         if (turret == null || !turret.isAvailable()) {
@@ -506,7 +496,6 @@ public class AutoShotSequenceController {
     }
 
     private void handleAbort() {
-        stopIntakes();
         setFlywheelVelocity(config.flywheelIdleVelocity);
         if (abortRequiresReturnHome && turret != null && turret.isAvailable()) {
             enterState(State.RETURN_HOME);
@@ -519,7 +508,6 @@ public class AutoShotSequenceController {
     }
 
     private void finishSequence() {
-        stopIntakes();
         setFlywheelVelocity(config.flywheelIdleVelocity);
         activeSequence = SequenceType.NONE;
         state = State.IDLE;
@@ -574,13 +562,15 @@ public class AutoShotSequenceController {
         if (rightFlyWheel != null) rightFlyWheel.setVelocity(velocity);
     }
 
-    private void stopIntakes() {
-        setIntakeVelocity(0.0, 0.0);
-    }
-
-    private void setIntakeVelocity(double rightFrontVelocity, double leftTransferVelocity) {
-        if (rightIntakeFront != null) rightIntakeFront.setVelocity(rightFrontVelocity);
-        if (leftIntakeTransfer != null) leftIntakeTransfer.setVelocity(leftTransferVelocity);
+    private void forceStopIntakes() {
+        if (rightIntakeFront != null) {
+            rightIntakeFront.setVelocity(0.0);
+            rightIntakeFront.setPower(0.0);
+        }
+        if (leftIntakeTransfer != null) {
+            leftIntakeTransfer.setVelocity(0.0);
+            leftIntakeTransfer.setPower(0.0);
+        }
     }
 
     private boolean requiresPreFeedRealign() {
