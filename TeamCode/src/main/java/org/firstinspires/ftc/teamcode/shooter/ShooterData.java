@@ -41,11 +41,6 @@ public class ShooterData {
         return distanceToVelocity;
     }
 
-    /**
-     * Get interpolated velocity for a given distance in inches.
-     * - Clamps to first/last entry outside range.
-     * - Linearly interpolates between nearest two points inside range.
-     */
     public double getTargetVelocity(double distanceInches) {
         if (distanceToVelocity.isEmpty()) return 0.0;
 
@@ -75,7 +70,7 @@ public class ShooterData {
         ShooterData data = new ShooterData();
 
         // TODO: Replace with real tuned points (distance inches, velocity units you use).
-        data.put(24, 1600);
+        data.put(24.5, 1600);
         data.put(30, 1750);
         data.put(36, 1850);
         data.put(42, 1950);

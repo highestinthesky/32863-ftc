@@ -4,6 +4,7 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
 import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
 import org.firstinspires.ftc.teamcode.functions;
@@ -19,9 +20,6 @@ public class LimelightFlywheelDistanceTuner extends OpMode {
 
     private final double[] stepSizes = {1000.0, 500.0, 100.0, 10.0, 1.0};
     private int stepIndex = 2;
-    private final double[] intakeStepSizes = {500.0, 100.0, 10.0, 1.0};
-    private int intakeStepIndex = 1;
-
     private DcMotorEx leftFlyWheel;
     private DcMotorEx rightFlyWheel;
     private DcMotorEx leftIntake;
@@ -30,7 +28,6 @@ public class LimelightFlywheelDistanceTuner extends OpMode {
     private int goalTagId = BLUE_GOAL_TAG_ID;
     private boolean spinEnabled = false;
     private double manualVelocity = 1800.0;
-    private boolean leftIntakeEnabled = false;
     private double leftIntakeVelocity = LEFT_INTAKE_DEFAULT_VELOCITY;
 
     private Double lastValidDistanceInches = null;
@@ -42,18 +39,18 @@ public class LimelightFlywheelDistanceTuner extends OpMode {
         rightFlyWheel = hardwareMap.get(DcMotorEx.class, "rflywheel");
         leftIntake = hardwareMap.get(DcMotorEx.class, "leftintake");
 
-        rightFlyWheel.setDirection(DcMotorEx.Direction.FORWARD);
-        leftFlyWheel.setDirection(DcMotorEx.Direction.REVERSE);
+        rightFlyWheel.setDirection(DcMotorEx.Direction.REVERSE);
+        leftFlyWheel.setDirection(DcMotorEx.Direction.FORWARD);
         leftFlyWheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         rightFlyWheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         functions.applyFlywheelPidf(leftFlyWheel, rightFlyWheel);
         leftFlyWheel.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         rightFlyWheel.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
 
-        leftIntake.setDirection(DcMotorEx.Direction.FORWARD);
+        leftIntake.setDirection(DcMotorEx.Direction.REVERSE);
         leftIntake.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         functions.applyIntakePidf(leftIntake);
-        leftIntake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        leftIntake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
         megaTag2 = new functions.MegaTag2Prep(hardwareMap, telemetry, "limelight", "imu", LIMELIGHT_APRILTAG_PIPELINE);
         megaTag2.initializeAndConfigure();
@@ -77,10 +74,6 @@ public class LimelightFlywheelDistanceTuner extends OpMode {
         if (gamepad1.bWasPressed()) stepIndex = (stepIndex + 1) % stepSizes.length;
         if (gamepad1.dpadLeftWasPressed()) manualVelocity = Math.max(0.0, manualVelocity - stepSizes[stepIndex]);
         if (gamepad1.dpadRightWasPressed()) manualVelocity += stepSizes[stepIndex];
-        if (gamepad1.leftBumperWasPressed()) leftIntakeEnabled = !leftIntakeEnabled;
-        if (gamepad1.rightBumperWasPressed()) intakeStepIndex = (intakeStepIndex + 1) % intakeStepSizes.length;
-        if (gamepad1.dpadUpWasPressed()) leftIntakeVelocity += intakeStepSizes[intakeStepIndex];
-        if (gamepad1.dpadDownWasPressed()) leftIntakeVelocity = Math.max(0.0, leftIntakeVelocity - intakeStepSizes[intakeStepIndex]);
         if (gamepad1.aWasPressed()) {
             goalTagId = (goalTagId == BLUE_GOAL_TAG_ID) ? RED_GOAL_TAG_ID : BLUE_GOAL_TAG_ID;
             if (megaTag2 != null) {
@@ -103,11 +96,14 @@ public class LimelightFlywheelDistanceTuner extends OpMode {
             rightFlyWheel.setVelocity(0.0);
         }
 
-        if (leftIntakeEnabled) {
-            leftIntake.setVelocity(leftIntakeVelocity);
+        if (gamepad1.left_bumper){
+            leftIntake.setVelocity(6000);
+        } else if (gamepad1.left_trigger > 0.4){
+            leftIntake.setVelocity(-2000);
         } else {
-            leftIntake.setVelocity(0.0);
+            leftIntake.setVelocity(0);
         }
+
 
         double leftVelocity = leftFlyWheel.getVelocity();
         double rightVelocity = rightFlyWheel.getVelocity();
@@ -128,8 +124,6 @@ public class LimelightFlywheelDistanceTuner extends OpMode {
         telemetry.addData("Set Vel", "%.1f", manualVelocity);
         telemetry.addData("L/R Vel", "%.1f / %.1f", leftVelocity, rightVelocity);
         telemetry.addData("Current A", "%.2f", totalCurrent);
-        telemetry.addData("Left Intake", leftIntakeEnabled);
-        telemetry.addData("Intake Step", "%.1f", intakeStepSizes[intakeStepIndex]);
         telemetry.addData("Intake Set Vel", "%.1f", leftIntakeVelocity);
         telemetry.addData("Intake Meas Vel", "%.1f", leftIntakeMeasuredVelocity);
 

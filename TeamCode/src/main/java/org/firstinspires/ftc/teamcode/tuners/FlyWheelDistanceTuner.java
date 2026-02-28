@@ -4,6 +4,7 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
 
@@ -15,10 +16,16 @@ public class FlyWheelDistanceTuner extends OpMode {
     private static final double I = 0.0;
     private static final double D = 0.0;
     private static final double F = 7.0;
+    private static final double P2 = 4.0;
+    private static final double I2 = 0.0;
+    private static final double D2 = 0.0;
+    private static final double F2 = 5.0;
     double[] stepSizes = {1000.0, 500.0, 100.0, 10.0, 1.0};
     int stepIndex = 2;
     private DcMotorEx rightFlyWheel;
     private DcMotorEx leftFlyWheel;
+    private DcMotorEx rightintake;
+    private DcMotorEx leftintake;
     double curvelocity = 0;
     private Servo turrethood;
     double turrethoodvalue;
@@ -26,9 +33,26 @@ public class FlyWheelDistanceTuner extends OpMode {
     public void init() {
         leftFlyWheel = hardwareMap.get(DcMotorEx.class, "lflywheel");
         rightFlyWheel = hardwareMap.get(DcMotorEx.class, "rflywheel");
+
+        // temp intake setups
+        rightintake = hardwareMap.get(DcMotorEx.class, "rightintake");
+        leftintake = hardwareMap.get(DcMotorEx.class, "leftintake");
+
+        rightintake.setDirection(DcMotorEx.Direction.FORWARD);
+        leftintake.setDirection(DcMotorEx.Direction.REVERSE);
+        rightintake.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
+        leftintake.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
+
+        PIDFCoefficients intakePidf = new PIDFCoefficients(P2, I2, D2, F2);
+        rightintake.setPIDFCoefficients(DcMotorEx.RunMode.RUN_USING_ENCODER, intakePidf);
+        leftintake.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, intakePidf);
+        rightintake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        leftintake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+
+
         // flywheel directions
-        rightFlyWheel.setDirection(DcMotorEx.Direction.FORWARD);
-        leftFlyWheel.setDirection(DcMotorEx.Direction.REVERSE);
+        rightFlyWheel.setDirection(DcMotorEx.Direction.REVERSE);
+        leftFlyWheel.setDirection(DcMotorEx.Direction.FORWARD);
         // flywheel encoder setup
         leftFlyWheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         rightFlyWheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
@@ -67,6 +91,21 @@ public class FlyWheelDistanceTuner extends OpMode {
                 if (turrethoodvalue > 0) turrethoodvalue -= 0.1;
                 break;
         }
+
+        if (gamepad1.right_trigger > 0.4){
+            rightintake.setVelocity(6000);
+        } else{
+            rightintake.setVelocity(0);
+        }
+
+        if (gamepad1.left_trigger > 0.4){
+            leftintake.setVelocity(6000);
+        } else {
+            leftintake.setVelocity(0);
+        }
+
+
+
         turrethood.setPosition(turrethoodvalue);
 
         double leftFlyWheelCurrent = leftFlyWheel.getCurrent(CurrentUnit.AMPS);
