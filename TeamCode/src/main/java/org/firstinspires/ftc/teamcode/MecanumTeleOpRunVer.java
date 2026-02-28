@@ -9,7 +9,8 @@ public abstract class MecanumTeleOpRunVer extends OpMode {
     private static final double DEFAULT_FLYWHEEL_TARGET_VELOCITY = 6000.0;
     private static final double RIGHT_INTAKE_FEED_VELOCITY = 1150.0;
     private static final double RIGHT_INTAKE_REVERSE_VELOCITY = -300.0;
-    private static final int LIMELIGHT_APRILTAG_PIPELINE = 1;
+    private static final int BLUE_TAG_PIPELINE = 0;
+    private static final int RED_TAG_PIPELINE = 1;
 
     private DcMotorEx leftFrontDrive;
     private DcMotorEx rightFrontDrive;
@@ -130,7 +131,13 @@ public abstract class MecanumTeleOpRunVer extends OpMode {
             telemetry.addData("Pinpoint", "Unavailable: %s", e.getClass().getSimpleName());
         }
 
-        megaTag2 = new functions.MegaTag2Prep(hardwareMap, telemetry, "limelight", "imu", LIMELIGHT_APRILTAG_PIPELINE);
+        megaTag2 = new functions.MegaTag2Prep(
+                hardwareMap,
+                telemetry,
+                "limelight",
+                "imu",
+                getPipelineForGoalTag(getGoalTagId())
+        );
         megaTag2.initializeAndConfigure();
     }
 
@@ -233,5 +240,9 @@ public abstract class MecanumTeleOpRunVer extends OpMode {
         }
 
         telemetry.update();
+    }
+
+    private int getPipelineForGoalTag(int goalTagId) {
+        return goalTagId == 20 ? BLUE_TAG_PIPELINE : RED_TAG_PIPELINE;
     }
 }

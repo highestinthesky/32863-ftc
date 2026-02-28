@@ -11,7 +11,9 @@ import org.firstinspires.ftc.teamcode.shooter.ShooterData;
 
 @TeleOp(name = "LimelightFlywheelDistanceTuner", group = "Tuners")
 public class LimelightFlywheelDistanceTuner extends OpMode {
-    private static final int LIMELIGHT_APRILTAG_PIPELINE = 1;
+    private static final int BLUE_TAG_PIPELINE = 0;
+    private static final int RED_TAG_PIPELINE = 1;
+    private static final int LIMELIGHT_APRILTAG_PIPELINE = BLUE_TAG_PIPELINE;
     private static final int BLUE_GOAL_TAG_ID = 20;
     private static final int RED_GOAL_TAG_ID = 24;
 
@@ -64,7 +66,12 @@ public class LimelightFlywheelDistanceTuner extends OpMode {
         if (gamepad1.bWasPressed()) stepIndex = (stepIndex + 1) % stepSizes.length;
         if (gamepad1.dpadLeftWasPressed()) manualVelocity = Math.max(0.0, manualVelocity - stepSizes[stepIndex]);
         if (gamepad1.dpadRightWasPressed()) manualVelocity += stepSizes[stepIndex];
-        if (gamepad1.aWasPressed()) goalTagId = (goalTagId == BLUE_GOAL_TAG_ID) ? RED_GOAL_TAG_ID : BLUE_GOAL_TAG_ID;
+        if (gamepad1.aWasPressed()) {
+            goalTagId = (goalTagId == BLUE_GOAL_TAG_ID) ? RED_GOAL_TAG_ID : BLUE_GOAL_TAG_ID;
+            if (megaTag2 != null) {
+                megaTag2.switchPipeline(getPipelineForGoalTag(goalTagId));
+            }
+        }
 
         Double distanceInches = megaTag2 != null ? megaTag2.getGoalTagHorizontalDistanceInches(goalTagId) : null;
         Double txDegrees = megaTag2 != null ? megaTag2.getGoalTagTxDegrees(goalTagId) : null;
@@ -89,6 +96,8 @@ public class LimelightFlywheelDistanceTuner extends OpMode {
 
         telemetry.addLine("----- Limelight + Flywheel Distance Tuner -----");
         telemetry.addData("Goal Tag ID", goalTagId);
+        telemetry.addData("Expected Pipeline", getPipelineForGoalTag(goalTagId));
+        telemetry.addData("Active Pipeline", megaTag2 != null ? megaTag2.getActivePipelineIndex() : -1);
         telemetry.addData("Tag Status", megaTag2 != null ? megaTag2.getGoalTagStatus(goalTagId) : "n/a");
         telemetry.addData("Pipeline Check", megaTag2 != null ? megaTag2.getPipelineValidationMessage() : "n/a");
         telemetry.addData("Distance (in) [LIVE]", distanceInches == null ? "n/a" : String.format("%.2f", distanceInches));
@@ -121,5 +130,9 @@ public class LimelightFlywheelDistanceTuner extends OpMode {
     public void stop() {
         leftFlyWheel.setVelocity(0.0);
         rightFlyWheel.setVelocity(0.0);
+    }
+
+    private int getPipelineForGoalTag(int tagId) {
+        return tagId == BLUE_GOAL_TAG_ID ? BLUE_TAG_PIPELINE : RED_TAG_PIPELINE;
     }
 }

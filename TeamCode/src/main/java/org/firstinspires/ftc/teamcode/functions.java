@@ -216,7 +216,7 @@ public class functions {
 
     public static class MegaTag2Prep {
         private final Telemetry fallbackTelemetry;
-        private final int pipelineId;
+        private int expectedPipelineId;
 
         private Limelight3A limelight;
         private IMU imu;
@@ -231,7 +231,7 @@ public class functions {
 
         public MegaTag2Prep(HardwareMap hardwareMap, Telemetry telemetry, String limelightName, String imuName, int pipelineId) {
             this.fallbackTelemetry = telemetry;
-            this.pipelineId = pipelineId;
+            this.expectedPipelineId = pipelineId;
             try {
                 limelight = hardwareMap.get(Limelight3A.class, limelightName);
                 imu = hardwareMap.get(IMU.class, imuName);
@@ -246,7 +246,7 @@ public class functions {
         public void initializeAndConfigure() {
             if (!available) return;
             try {
-                limelight.pipelineSwitch(pipelineId);
+                limelight.pipelineSwitch(expectedPipelineId);
                 RevHubOrientationOnRobot orientationOnRobot = new RevHubOrientationOnRobot(
                         RevHubOrientationOnRobot.LogoFacingDirection.UP,
                         RevHubOrientationOnRobot.UsbFacingDirection.FORWARD
@@ -333,6 +333,23 @@ public class functions {
             return fps;
         }
 
+        public int getExpectedPipelineId() {
+            return expectedPipelineId;
+        }
+
+        public boolean switchPipeline(int pipelineId) {
+            if (!available) return false;
+            try {
+                boolean switched = limelight.pipelineSwitch(pipelineId);
+                expectedPipelineId = pipelineId;
+                status = switched ? "Pipeline " + pipelineId : "Pipeline switch failed";
+                return switched;
+            } catch (Exception e) {
+                status = "Pipeline switch error: " + e.getClass().getSimpleName();
+                return false;
+            }
+        }
+
         public boolean isAprilTagPipelineLikely() {
             if (pipelineType == null) return false;
             String normalized = pipelineType.toLowerCase();
@@ -343,8 +360,8 @@ public class functions {
 
         public String getPipelineValidationMessage() {
             if (!connected) return "Limelight disconnected";
-            if (activePipelineIndex != pipelineId) {
-                return String.format("Wrong pipeline active: %d (expected %d)", activePipelineIndex, pipelineId);
+            if (activePipelineIndex != expectedPipelineId) {
+                return String.format("Wrong pipeline active: %d (expected %d)", activePipelineIndex, expectedPipelineId);
             }
             if (!isAprilTagPipelineLikely()) {
                 return "Active pipeline is not AprilTag/Fiducial";
