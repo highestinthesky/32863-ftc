@@ -4,6 +4,7 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.teamcode.shooter.AutoShotSequenceController;
 import org.firstinspires.ftc.teamcode.shooter.ShooterData;
@@ -42,6 +43,7 @@ public class BlueTeleOp extends OpMode {
     private double commandedRightIntakePower = Double.NaN;
     private boolean goalTagDetected = false;
     private boolean faultModeEnabled = false;
+    private Servo turrethood;
 
     @Override
     public void init() {
@@ -49,6 +51,9 @@ public class BlueTeleOp extends OpMode {
         bindHardware();
         configureHardware();
         initializeLocalizationAndVisionPrep();
+
+        turrethood = hardwareMap.get(Servo.class, "tservo");
+        turrethood.setDirection(Servo.Direction.REVERSE);
 
         telemetry.addLine("Initialized. Press PLAY.");
         telemetry.update();
@@ -62,6 +67,8 @@ public class BlueTeleOp extends OpMode {
         if (driveController != null) driveController.resetForStart();
         if (driveController != null) driveController.setFaultModeEnabled(faultModeEnabled);
         if (megaTag2 != null) megaTag2.start();
+
+        turrethood.setPosition(1);
     }
 
     @Override
@@ -78,6 +85,7 @@ public class BlueTeleOp extends OpMode {
 
     @Override
     public void stop() {
+        turrethood.setPosition(0);
         stopping = true;
 
         if (autoShotController != null) {

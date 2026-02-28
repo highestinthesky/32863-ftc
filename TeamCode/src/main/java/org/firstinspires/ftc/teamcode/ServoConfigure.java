@@ -6,26 +6,22 @@ import com.qualcomm.robotcore.hardware.Servo;
 
 @TeleOp(name="ServoConfigure")
 public class ServoConfigure extends OpMode {
-    private Servo rightturretturn;
-    private Servo leftturretturn;
+    private Servo turrethood;
     public double turretturnvalue;
 
     @Override
     public void init() {
 
-        rightturretturn = hardwareMap.get(Servo.class, "rightturretturn");
-        leftturretturn = hardwareMap.get(Servo.class, "leftturretturn");
+        turrethood = hardwareMap.get(Servo.class, "tservo");
 
-        leftturretturn.setDirection(Servo.Direction.FORWARD);
-        rightturretturn.setDirection(Servo.Direction.REVERSE);
+        turrethood.setDirection(Servo.Direction.REVERSE);
 
         telemetry.addLine("init done");
     }
 
     @Override
     public void start() {
-        rightturretturn.setPosition(0);
-        leftturretturn.setPosition(0);
+        turrethood.setPosition(0);
     }
 
     @Override
@@ -42,8 +38,7 @@ public class ServoConfigure extends OpMode {
                 if (turretturnvalue > 0) turretturnvalue -= 0.1;
         }
 
-        rightturretturn.setPosition(turretturnvalue);
-        leftturretturn.setPosition(turretturnvalue);
+        turrethood.setPosition(turretturnvalue);
         telemetry.update();
     }
 }

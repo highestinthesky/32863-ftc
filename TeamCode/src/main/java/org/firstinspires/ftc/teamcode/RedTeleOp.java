@@ -4,6 +4,7 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.teamcode.shooter.AutoShotSequenceController;
 import org.firstinspires.ftc.teamcode.shooter.ShooterData;
@@ -42,6 +43,7 @@ public class RedTeleOp extends OpMode {
     private double commandedRightIntakePower = Double.NaN;
     private boolean goalTagDetected = false;
     private boolean faultModeEnabled = false;
+    private Servo turrethood;
 
     @Override
     public void init() {
