@@ -5,11 +5,12 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
-import org.firstinspires.ftc.teamcode.shooter.AutoShotSequenceController;
 import org.firstinspires.ftc.teamcode.shooter.ShooterData;
 import org.firstinspires.ftc.teamcode.shooter.ShotControlConfig;
 import org.firstinspires.ftc.teamcode.shooter.TurretCrServoController;
+import org.firstinspires.ftc.teamcode.shooter.VisionShooterTargeting;
 
 @TeleOp(name = "BlueTeleOp")
 public class BlueTeleOp extends OpMode {
@@ -38,12 +39,19 @@ public class BlueTeleOp extends OpMode {
 
     private functions.MegaTag2Prep megaTag2;
     private TurretCrServoController turretController;
-    private AutoShotSequenceController autoShotController;
+    private VisionShooterTargeting visionTargeting;
     private double commandedLeftIntakePower = Double.NaN;
     private double commandedRightIntakePower = Double.NaN;
+    private double commandedFlywheelVelocity = 0.0;
+    private double visionTargetVelocity = 0.0;
+    private Double lastSeenTxDegrees = null;
+    private boolean visionFeedModeActive = false;
+    private String visionFeedStatus = "Idle";
     private boolean goalTagDetected = false;
     private boolean faultModeEnabled = false;
     private Servo turrethood;
+    private final ElapsedTime loopTimer = new ElapsedTime();
+    private double lastLoopSeconds = 0.0;
 
     @Override
     public void init() {
@@ -64,9 +72,17 @@ public class BlueTeleOp extends OpMode {
         stopping = false;
         commandedLeftIntakePower = Double.NaN;
         commandedRightIntakePower = Double.NaN;
+        commandedFlywheelVelocity = shotConfig.flywheelIdleVelocity;
+        visionTargetVelocity = 0.0;
+        lastSeenTxDegrees = null;
+        visionFeedModeActive = false;
+        visionFeedStatus = "Idle";
+        lastLoopSeconds = 0.0;
         if (driveController != null) driveController.resetForStart();
         if (driveController != null) driveController.setFaultModeEnabled(faultModeEnabled);
         if (megaTag2 != null) megaTag2.start();
+        setFlywheelVelocity(shotConfig.flywheelIdleVelocity);
+        if (turretController != null) turretController.stop();
 
         turrethood.setPosition(1);
     }
@@ -76,7 +92,7 @@ public class BlueTeleOp extends OpMode {
         if (stopping) return;
 
         updateSensors();
-        updateAutoShotSequence();
+        updateVisionFeedMode();
         updateIntakeCommands();
         updateDriveFaultModeToggle();
         updateDrive();
@@ -88,14 +104,9 @@ public class BlueTeleOp extends OpMode {
         turrethood.setPosition(0);
         stopping = true;
 
-        if (autoShotController != null) {
-            autoShotController.stopAll();
-        } else {
-            FaultTolerantMecanumDrive.MotorSafety.setVelocity(leftFlyWheel, 0);
-            FaultTolerantMecanumDrive.MotorSafety.setVelocity(rightFlyWheel, 0);
-            FaultTolerantMecanumDrive.MotorSafety.setVelocity(rightintake, 0);
-            FaultTolerantMecanumDrive.MotorSafety.setVelocity(leftintake, 0);
-        }
+        setFlywheelVelocity(0.0);
+        FaultTolerantMecanumDrive.MotorSafety.setVelocity(rightintake, 0);
+        FaultTolerantMecanumDrive.MotorSafety.setVelocity(leftintake, 0);
         setIntakePowers(0.0, 0.0);
 
         if (turretController != null) turretController.stop();
@@ -144,17 +155,7 @@ public class BlueTeleOp extends OpMode {
         megaTag2.initializeAndConfigure();
 
         turretController = new TurretCrServoController(hardwareMap, TURRET_RIGHT_SERVO, TURRET_LEFT_SERVO);
-        autoShotController = new AutoShotSequenceController(
-                leftFlyWheel,
-                rightFlyWheel,
-                rightintake,
-                leftintake,
-                megaTag2,
-                shooterData,
-                GOAL_TAG_ID,
-                turretController,
-                shotConfig
-        );
+        visionTargeting = new VisionShooterTargeting(megaTag2, shooterData, GOAL_TAG_ID);
     }
 
     private void updateSensors() {
@@ -166,13 +167,55 @@ public class BlueTeleOp extends OpMode {
         }
     }
 
-    private void updateAutoShotSequence() {
-        if (autoShotController != null) {
-            autoShotController.update(gamepad2.bWasPressed(), false);
+    private void updateVisionFeedMode() {
+        if (gamepad2.bWasPressed() && !visionFeedModeActive) {
+            visionFeedModeActive = true;
+            visionFeedStatus = "Vision feed active";
+            visionTargetVelocity = 0.0;
+            if (turretController != null) turretController.beginAimAttempt();
         }
+
+        if (gamepad2.aWasPressed() && visionFeedModeActive) {
+            stopVisionFeedMode();
+            return;
+        }
+
+        if (!visionFeedModeActive) {
+            setFlywheelVelocity(shotConfig.flywheelIdleVelocity);
+            return;
+        }
+
+        boolean hasTarget = false;
+        Double aimTx = lastSeenTxDegrees;
+        if (visionTargeting != null) {
+            visionTargeting.update();
+            hasTarget = visionTargeting.isTargetAvailable();
+            if (hasTarget) {
+                aimTx = visionTargeting.getTagTxDegrees();
+                if (aimTx != null) lastSeenTxDegrees = aimTx;
+                visionTargetVelocity = Math.max(0.0, visionTargeting.getTargetVelocity());
+            }
+        }
+
+        if (aimTx == null) {
+            aimTx = shotConfig.turretAimCoarseTxThresholdDegrees;
+            lastSeenTxDegrees = aimTx;
+        }
+
+        if (turretController != null && turretController.isAvailable()) {
+            turretController.aimToTx(aimTx, computeDtSeconds(), shotConfig, false);
+        }
+
+        double activeVelocity = visionTargetVelocity > 0.0 ? visionTargetVelocity : shotConfig.flywheelIdleVelocity;
+        setFlywheelVelocity(activeVelocity);
+
+        // During active vision-feed mode, human intake controls are intentionally ignored.
+        setIntakePowers(INTAKE_IN_POWER, INTAKE_IN_POWER);
+        visionFeedStatus = hasTarget ? "Tracking and feeding" : "Searching using last tx";
     }
 
     private void updateIntakeCommands() {
+        if (visionFeedModeActive) return;
         double leftPower = computeIntakePower(gamepad2.left_trigger, gamepad2.left_bumper);
         double rightPower = computeIntakePower(gamepad2.right_trigger, gamepad2.right_bumper);
         setIntakePowers(leftPower, rightPower);
@@ -190,19 +233,26 @@ public class BlueTeleOp extends OpMode {
         telemetry.addLine("--------------------------------------");
         telemetry.addData("Alliance", "Blue");
         telemetry.addData("Goal Tag ID", GOAL_TAG_ID);
-        telemetry.addData("Shoot Buttons", "B=shoot, X=disabled");
+        telemetry.addData("Shoot Buttons", "B=start vision feed, A=stop");
         telemetry.addData("Fault Mode", "%s (Y toggles)", faultModeEnabled ? "ON" : "OFF");
         telemetry.addData("Intake Controls", "LT/LB=left in/out, RT/RB=right in/out");
         telemetry.addData("AprilTag Detected", goalTagDetected);
-        if (autoShotController != null && autoShotController.isFlywheelChargedUp()) {
+        telemetry.addData("Vision Feed Mode", visionFeedModeActive ? "ACTIVE" : "IDLE");
+        telemetry.addData("Vision Feed Status", visionFeedStatus);
+        telemetry.addData("Flywheel Cmd Vel", "%.0f", commandedFlywheelVelocity);
+        if (isFlywheelChargedUp()) {
             telemetry.addLine("Flywheel charged up");
         }
 
         if (megaTag2 != null) {
             megaTag2.addTelemetry(telemetry);
         }
-        if (autoShotController != null) {
-            autoShotController.addTelemetry(telemetry);
+        if (visionTargeting != null) {
+            telemetry.addData("Vision", visionTargeting.getStatus());
+        }
+        if (turretController != null) {
+            telemetry.addData("Turret Status", turretController.getStatus());
+            telemetry.addData("Turret Cmd Pwr", "%.2f", turretController.getLastAppliedPower());
         }
 
         telemetry.update();
@@ -227,6 +277,40 @@ public class BlueTeleOp extends OpMode {
 
     private static double applyDeadband(double value, double deadband) {
         return Math.abs(value) >= Math.abs(deadband) ? value : 0.0;
+    }
+
+    private void setFlywheelVelocity(double velocity) {
+        commandedFlywheelVelocity = velocity;
+        if (leftFlyWheel != null) leftFlyWheel.setVelocity(velocity);
+        if (rightFlyWheel != null) rightFlyWheel.setVelocity(velocity);
+    }
+
+    private double computeDtSeconds() {
+        double now = loopTimer.seconds();
+        double dt = now - lastLoopSeconds;
+        lastLoopSeconds = now;
+        if (dt <= 0.0) return 0.02;
+        return Math.min(dt, 0.1);
+    }
+
+    private void stopVisionFeedMode() {
+        visionFeedModeActive = false;
+        visionFeedStatus = "Stopped by A";
+        visionTargetVelocity = 0.0;
+        lastSeenTxDegrees = null;
+        setFlywheelVelocity(shotConfig.flywheelIdleVelocity);
+        setIntakePowers(0.0, 0.0);
+        if (turretController != null) turretController.stop();
+    }
+
+    private boolean isFlywheelChargedUp() {
+        double target = Math.abs(commandedFlywheelVelocity);
+        double idle = Math.abs(shotConfig.flywheelIdleVelocity);
+        if (target <= idle + 100.0) return false;
+        double leftSpeed = Math.abs(leftFlyWheel.getVelocity());
+        double rightSpeed = Math.abs(rightFlyWheel.getVelocity());
+        return Math.abs(leftSpeed - target) <= shotConfig.flywheelReadyTolerance
+                && Math.abs(rightSpeed - target) <= shotConfig.flywheelReadyTolerance;
     }
 
     private void updateDriveFaultModeToggle() {
