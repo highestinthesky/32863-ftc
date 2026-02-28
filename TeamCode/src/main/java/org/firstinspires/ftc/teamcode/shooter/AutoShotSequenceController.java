@@ -58,6 +58,8 @@ public class AutoShotSequenceController {
     private Double lastSeenTxDegrees = null;
     private Double lostTagFallbackTxDegrees = null;
     private boolean usingFallbackTx = false;
+    private boolean abortRequiresReturnHome = false;
+    private State abortFromState = State.IDLE;
 
     public AutoShotSequenceController(
             DcMotorEx leftFlyWheel,
@@ -208,6 +210,8 @@ public class AutoShotSequenceController {
         lastSeenTxDegrees = null;
         lostTagFallbackTxDegrees = null;
         usingFallbackTx = false;
+        abortRequiresReturnHome = false;
+        abortFromState = State.IDLE;
         enterState(State.ACQUIRE_TAG);
         status = sequenceType == SequenceType.TWO_BALL ? "2-ball requested" : "3-ball requested";
     }
@@ -262,6 +266,11 @@ public class AutoShotSequenceController {
             if (lostTagFallbackTxDegrees == null) {
                 lostTagFallbackTxDegrees = lastSeenTxDegrees != null ? lastSeenTxDegrees : 0.0;
             }
+            lostTagFallbackTxDegrees = functions.clamp(
+                    lostTagFallbackTxDegrees,
+                    -Math.abs(config.turretLostTagFallbackTxMaxDegrees),
+                    Math.abs(config.turretLostTagFallbackTxMaxDegrees)
+            );
             aimTxDegrees = lostTagFallbackTxDegrees;
             lostTagFallbackTxDegrees = lostTagFallbackTxDegrees * config.turretLostTagFallbackTxDecayPerFrame;
 
@@ -276,7 +285,8 @@ public class AutoShotSequenceController {
             return;
         }
 
-        TurretCrServoController.AimResult aimResult = turret.aimToTx(aimTxDegrees, dtSeconds, config, true);
+        boolean enforceAimTimeout = !usingFallbackTx;
+        TurretCrServoController.AimResult aimResult = turret.aimToTx(aimTxDegrees, dtSeconds, config, enforceAimTimeout);
         if (aimResult == TurretCrServoController.AimResult.CENTERED) {
             centeredFrameCount++;
             if (centeredFrameCount >= config.turretCenteredFramesRequired) {
@@ -290,7 +300,12 @@ public class AutoShotSequenceController {
         } else if (aimResult == TurretCrServoController.AimResult.UNAVAILABLE) {
             abortSequence("Turret unavailable");
         } else {
-            centeredFrameCount = 0;
+            double centeredHoldRange = config.turretAimDeadbandDegrees * 1.5;
+            if (Math.abs(aimTxDegrees) > centeredHoldRange) {
+                centeredFrameCount = 0;
+            } else if (centeredFrameCount > 0) {
+                centeredFrameCount--;
+            }
             if (usingFallbackTx) {
                 status = String.format("Aiming fallback (%d/%d lost frames)", lostTagFrameCount, config.turretTagLossAbortFrames);
             } else {
@@ -302,6 +317,7 @@ public class AutoShotSequenceController {
     private void handleSpinup(double dtSeconds) {
         stopIntakes();
 
+        boolean spinupVisionLost = false;
         if (config.turretEnableSpinupCorrections && turret != null && turret.isAvailable()) {
             targeting.update();
             Double spinupTxDegrees;
@@ -315,25 +331,30 @@ public class AutoShotSequenceController {
                 lostTagFallbackTxDegrees = null;
                 usingFallbackTx = false;
             } else {
+                spinupVisionLost = true;
                 lostTagFrameCount++;
                 usingFallbackTx = true;
                 if (lostTagFallbackTxDegrees == null) {
                     lostTagFallbackTxDegrees = lastSeenTxDegrees != null ? lastSeenTxDegrees : 0.0;
                 }
+                lostTagFallbackTxDegrees = functions.clamp(
+                        lostTagFallbackTxDegrees,
+                        -Math.abs(config.turretLostTagFallbackTxMaxDegrees),
+                        Math.abs(config.turretLostTagFallbackTxMaxDegrees)
+                );
                 spinupTxDegrees = lostTagFallbackTxDegrees;
                 lostTagFallbackTxDegrees = lostTagFallbackTxDegrees * config.turretLostTagFallbackTxDecayPerFrame;
-                if (lostTagFrameCount >= config.turretTagLossAbortFrames) {
-                    abortSequence(String.format("Lost goal tag > %d frames during spinup", config.turretTagLossAbortFrames));
-                    return;
-                }
             }
 
-            if (spinupTxDegrees != null) {
+            boolean correctionAllowed = !spinupVisionLost || lostTagFrameCount < config.turretTagLossAbortFrames;
+            if (spinupTxDegrees != null && correctionAllowed) {
                 TurretCrServoController.AimResult spinupAim = turret.aimToTx(spinupTxDegrees, dtSeconds, config, false);
                 if (spinupAim == TurretCrServoController.AimResult.UNAVAILABLE) {
                     abortSequence("Turret unavailable during spinup");
                     return;
                 }
+            } else {
+                turret.stop();
             }
         }
 
@@ -359,7 +380,7 @@ public class AutoShotSequenceController {
         boolean settleMet = readyWindowActive && readyTimer.seconds() >= config.flywheelReadySettleSeconds;
         boolean timeoutMet = stateTimer.seconds() >= config.flywheelSpinupTimeoutSeconds;
         if (settleMet || timeoutMet) {
-            if (requiresPreFeedRealign()) {
+            if (!timeoutMet && requiresPreFeedRealign()) {
                 centeredFrameCount = 0;
                 if (turret != null && turret.isAvailable()) turret.beginAimAttempt();
                 enterState(State.AIM);
@@ -369,7 +390,11 @@ public class AutoShotSequenceController {
             enterState(activeSequence == SequenceType.THREE_BALL ? State.FEED_THREE_BACKOFF : State.FEED_TWO);
             status = settleMet ? "Spinup ready" : "Spinup timeout fallback";
         } else {
-            status = "Spinning up";
+            if (spinupVisionLost) {
+                status = String.format("Spinning up (vision lost %d/%d)", lostTagFrameCount, config.turretTagLossAbortFrames);
+            } else {
+                status = "Spinning up";
+            }
         }
     }
 
@@ -428,15 +453,21 @@ public class AutoShotSequenceController {
             enterState(State.COMPLETE);
             status = homed ? "Turret homed" : "Turret return timeout";
         } else {
-            status = "Returning turret home";
+            status = abortReason.isEmpty() ? "Returning turret home" : "Returning home after abort";
         }
     }
 
     private void handleAbort() {
         stopIntakes();
         setFlywheelVelocity(config.flywheelIdleVelocity);
-        if (turret != null && turret.isAvailable()) turret.startReturnHome();
-        enterState(State.RETURN_HOME);
+        if (abortRequiresReturnHome && turret != null && turret.isAvailable()) {
+            enterState(State.RETURN_HOME);
+            return;
+        }
+
+        if (turret != null) turret.resetHomeModel();
+        enterState(State.COMPLETE);
+        status = "Abort complete";
     }
 
     private void finishSequence() {
@@ -448,7 +479,9 @@ public class AutoShotSequenceController {
     }
 
     private void abortSequence(String reason) {
-        abortReason = reason;
+        abortFromState = state;
+        abortRequiresReturnHome = shouldReturnHomeAfterAbort(abortFromState);
+        abortReason = String.format("%s (from %s)", reason, abortFromState);
         status = reason;
         enterState(State.ABORT);
     }
@@ -463,6 +496,7 @@ public class AutoShotSequenceController {
             readyWindowActive = false;
         }
         if (newState == State.RETURN_HOME && turret != null && turret.isAvailable()) {
+            turret.clampEstimatedTurnOffset(config.turretReturnMaxEstimatedOffset);
             turret.startReturnHome();
         }
     }
@@ -503,5 +537,11 @@ public class AutoShotSequenceController {
         Double tx = targetTxDegrees != null ? targetTxDegrees : lastSeenTxDegrees;
         if (tx == null) return true;
         return Math.abs(tx) > config.preFeedMaxTxDegrees;
+    }
+
+    private boolean shouldReturnHomeAfterAbort(State fromState) {
+        return fromState == State.FEED_TWO
+                || fromState == State.FEED_THREE_BACKOFF
+                || fromState == State.FEED_THREE_FORWARD;
     }
 }

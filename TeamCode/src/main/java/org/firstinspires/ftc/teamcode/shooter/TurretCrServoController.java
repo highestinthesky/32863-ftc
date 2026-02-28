@@ -117,7 +117,12 @@ public class TurretCrServoController {
         }
 
         double previousOffset = estimatedTurnOffset;
-        double returnCommand = -Math.signum(estimatedTurnOffset) * Math.abs(config.turretReturnPower);
+        double proportionalReturn = -estimatedTurnOffset * Math.abs(config.turretReturnKp);
+        double returnCommand = functions.clamp(
+                proportionalReturn,
+                -Math.abs(config.turretReturnPower),
+                Math.abs(config.turretReturnPower)
+        );
         applyTurnCommand(returnCommand, dtSeconds, true);
 
         // Clamp small overshoot to zero.
@@ -138,6 +143,20 @@ public class TurretCrServoController {
         returningHome = false;
         if (available) setPower(0.0);
         status = available ? "Stopped" : status;
+    }
+
+    public void resetHomeModel() {
+        estimatedTurnOffset = 0.0;
+        lastAppliedPower = 0.0;
+        aimAttemptActive = false;
+        returningHome = false;
+        if (available) setPower(0.0);
+        status = available ? "Home model reset" : status;
+    }
+
+    public void clampEstimatedTurnOffset(double maxAbsOffset) {
+        if (maxAbsOffset <= 0.0) return;
+        estimatedTurnOffset = functions.clamp(estimatedTurnOffset, -Math.abs(maxAbsOffset), Math.abs(maxAbsOffset));
     }
 
     private void applyTurnCommand(double power, double dtSeconds, boolean trackOffset) {
