@@ -55,6 +55,7 @@ public class AutoShotSequenceController {
 
     private int lostTagFrameCount = 0;
     private int centeredFrameCount = 0;
+    private int lockFrameCount = 0;
     private Double lastSeenTxDegrees = null;
     private Double lostTagFallbackTxDegrees = null;
     private boolean usingFallbackTx = false;
@@ -187,6 +188,7 @@ public class AutoShotSequenceController {
         telemetry.addData("AutoShot Cmd Vel", "%.1f", commandedFlywheelVelocity);
         telemetry.addData("Aim Lost Frames", "%d/%d", lostTagFrameCount, config.turretTagLossAbortFrames);
         telemetry.addData("Aim Centered Frames", "%d/%d", centeredFrameCount, config.turretCenteredFramesRequired);
+        telemetry.addData("Aim Lock Frames", "%d/%d", lockFrameCount, config.turretLockFramesRequired);
         telemetry.addData("Aim Timeout Retries", "%d/%d", aimTimeoutRetryCount, config.turretAimTimeoutRetryLimit);
         telemetry.addData("Aim Fallback", usingFallbackTx);
         telemetry.addData("Aim Last tx", lastSeenTxDegrees == null ? "n/a" : String.format("%.2f", lastSeenTxDegrees));
@@ -209,6 +211,7 @@ public class AutoShotSequenceController {
         readyWindowActive = false;
         lostTagFrameCount = 0;
         centeredFrameCount = 0;
+        lockFrameCount = 0;
         lastSeenTxDegrees = null;
         lostTagFallbackTxDegrees = null;
         usingFallbackTx = false;
@@ -235,6 +238,7 @@ public class AutoShotSequenceController {
         lastSeenTxDegrees = targetTxDegrees;
         lostTagFrameCount = 0;
         centeredFrameCount = 0;
+        lockFrameCount = 0;
         lostTagFallbackTxDegrees = null;
         usingFallbackTx = false;
 
@@ -288,9 +292,22 @@ public class AutoShotSequenceController {
             return;
         }
 
-        boolean enforceAimTimeout = !usingFallbackTx;
+        boolean enforceAimTimeout = !usingFallbackTx && lockFrameCount < config.turretLockFramesRequired;
+        boolean hasVisionThisFrame = !usingFallbackTx;
+        if (hasVisionThisFrame && Math.abs(aimTxDegrees) <= config.turretLockWindowDegrees) {
+            lockFrameCount++;
+        } else if (Math.abs(aimTxDegrees) > config.turretLockWindowDegrees) {
+            lockFrameCount = 0;
+        } else if (lockFrameCount > 0) {
+            lockFrameCount--;
+        }
+
         TurretCrServoController.AimResult aimResult = turret.aimToTx(aimTxDegrees, dtSeconds, config, enforceAimTimeout);
-        if (aimResult == TurretCrServoController.AimResult.CENTERED) {
+        if (hasVisionThisFrame && lockFrameCount >= config.turretLockFramesRequired) {
+            aimTimeoutRetryCount = 0;
+            enterState(State.SPINUP);
+            status = String.format("General lock stable %d/%d", lockFrameCount, config.turretLockFramesRequired);
+        } else if (aimResult == TurretCrServoController.AimResult.CENTERED) {
             centeredFrameCount++;
             if (centeredFrameCount >= config.turretCenteredFramesRequired) {
                 aimTimeoutRetryCount = 0;
@@ -307,6 +324,7 @@ public class AutoShotSequenceController {
             } else if (aimTimeoutRetryCount < config.turretAimTimeoutRetryLimit) {
                 aimTimeoutRetryCount++;
                 centeredFrameCount = 0;
+                lockFrameCount = 0;
                 turret.beginAimAttempt();
                 status = String.format(
                         "Aim timeout retry %d/%d (tx=%.2f)",
@@ -515,6 +533,7 @@ public class AutoShotSequenceController {
         stateTimer.reset();
         if (newState == State.AIM) {
             centeredFrameCount = 0;
+            lockFrameCount = 0;
         }
         if (newState == State.SPINUP) {
             readyWindowActive = false;

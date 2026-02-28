@@ -110,6 +110,8 @@ public class BlueTeleOp extends OpMode {
                 rightintake,
                 leftintake
         );
+        leftFlyWheel.setDirection(DcMotorSimple.Direction.FORWARD);
+        rightFlyWheel.setDirection(DcMotorSimple.Direction.REVERSE);
         leftintake.setDirection(DcMotorSimple.Direction.REVERSE);
 
         driveController = new FaultTolerantMecanumDrive(

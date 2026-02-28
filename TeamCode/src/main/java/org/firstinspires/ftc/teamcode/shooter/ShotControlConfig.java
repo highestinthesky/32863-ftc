@@ -25,6 +25,8 @@ public class ShotControlConfig {
     public double turretAimDirection = 1.0;
     public double turretAimTimeoutSeconds = 3.50;
     public int turretCenteredFramesRequired = 1;
+    public int turretLockFramesRequired = 60; // target range: 50-70 frames
+    public double turretLockWindowDegrees = 5.0;
     public int turretTagLossAbortFrames = 60; // target range: 50-70 frames
     public double turretLostTagFallbackTxDecayPerFrame = 0.94;
     public double turretLostTagFallbackTxMaxDegrees = 10.0;
@@ -34,10 +36,14 @@ public class ShotControlConfig {
     public double preFeedMaxTxDegrees = 2.5;
 
     public double turretReturnPower = 0.18;
+    public double turretReturnMinPower = 0.05;
     public double turretReturnKp = 2.1;
     public double turretReturnMaxEstimatedOffset = 1.20;
     public double turretReturnStopThreshold = 0.02;
     public double turretReturnTimeoutSeconds = 2.00;
+    public double turretHomeOffsetTrackTxThresholdDegrees = 5.0;
+    public double turretHomeOffsetTrackPowerThreshold = 0.06;
+    public double turretHomeOffsetIdleDecayPerSecond = 0.40;
 
     // 2-ball sequence: transfer-only.
     public double twoShotTransferVelocity = 6000.0;

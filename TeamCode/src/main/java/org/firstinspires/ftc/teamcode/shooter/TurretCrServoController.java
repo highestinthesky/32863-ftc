@@ -91,7 +91,9 @@ public class TurretCrServoController {
         double targetCommand = txDegrees * config.turretAimKp * config.turretAimDirection;
         targetCommand = functions.clamp(targetCommand, -Math.abs(config.turretAimMaxPower), Math.abs(config.turretAimMaxPower));
         double command = rateLimitCommand(targetCommand, dtSeconds, config);
-        applyTurnCommand(command, dtSeconds, true);
+        boolean trackHomeOffset = Math.abs(txDegrees) >= Math.abs(config.turretHomeOffsetTrackTxThresholdDegrees)
+                && Math.abs(command) >= Math.abs(config.turretHomeOffsetTrackPowerThreshold);
+        applyTurnCommand(command, dtSeconds, trackHomeOffset, config);
         status = String.format("Aiming tx=%.2f pwr=%.2f", txDegrees, command);
         return AimResult.AIMING;
     }
@@ -123,7 +125,11 @@ public class TurretCrServoController {
                 -Math.abs(config.turretReturnPower),
                 Math.abs(config.turretReturnPower)
         );
-        applyTurnCommand(returnCommand, dtSeconds, true);
+        double minReturnPower = Math.abs(config.turretReturnMinPower);
+        if (Math.abs(returnCommand) < minReturnPower) {
+            returnCommand = Math.signum(returnCommand) * minReturnPower;
+        }
+        applyTurnCommand(returnCommand, dtSeconds, true, config);
 
         // Clamp small overshoot to zero.
         if (Math.signum(previousOffset) != Math.signum(estimatedTurnOffset)) {
@@ -160,9 +166,27 @@ public class TurretCrServoController {
     }
 
     private void applyTurnCommand(double power, double dtSeconds, boolean trackOffset) {
+        applyTurnCommand(power, dtSeconds, trackOffset, null);
+    }
+
+    private void applyTurnCommand(double power, double dtSeconds, boolean trackOffset, ShotControlConfig config) {
         setPower(power);
-        if (trackOffset && dtSeconds > 0.0) {
+        if (dtSeconds <= 0.0) return;
+
+        if (trackOffset) {
             estimatedTurnOffset += power * dtSeconds;
+            return;
+        }
+
+        if (config != null) {
+            double decayPerSecond = Math.abs(config.turretHomeOffsetIdleDecayPerSecond);
+            if (decayPerSecond > 0.0) {
+                double keepFactor = Math.max(0.0, 1.0 - decayPerSecond * dtSeconds);
+                estimatedTurnOffset *= keepFactor;
+                if (Math.abs(estimatedTurnOffset) < Math.abs(config.turretReturnStopThreshold)) {
+                    estimatedTurnOffset = 0.0;
+                }
+            }
         }
     }
 
