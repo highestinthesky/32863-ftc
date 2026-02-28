@@ -11,7 +11,7 @@ import org.firstinspires.ftc.teamcode.shooter.ShooterData;
 
 @TeleOp(name = "LimelightFlywheelDistanceTuner", group = "Tuners")
 public class LimelightFlywheelDistanceTuner extends OpMode {
-    private static final int LIMELIGHT_APRILTAG_PIPELINE = 21;
+    private static final int LIMELIGHT_APRILTAG_PIPELINE = 1;
     private static final int BLUE_GOAL_TAG_ID = 20;
     private static final int RED_GOAL_TAG_ID = 24;
 
@@ -90,6 +90,7 @@ public class LimelightFlywheelDistanceTuner extends OpMode {
         telemetry.addLine("----- Limelight + Flywheel Distance Tuner -----");
         telemetry.addData("Goal Tag ID", goalTagId);
         telemetry.addData("Tag Status", megaTag2 != null ? megaTag2.getGoalTagStatus(goalTagId) : "n/a");
+        telemetry.addData("Pipeline Check", megaTag2 != null ? megaTag2.getPipelineValidationMessage() : "n/a");
         telemetry.addData("Distance (in) [LIVE]", distanceInches == null ? "n/a" : String.format("%.2f", distanceInches));
         telemetry.addData("tx (deg) [LIVE]", txDegrees == null ? "n/a" : String.format("%.2f", txDegrees));
         telemetry.addData("Distance (in) [LAST]", lastValidDistanceInches == null ? "n/a" : String.format("%.2f", lastValidDistanceInches));

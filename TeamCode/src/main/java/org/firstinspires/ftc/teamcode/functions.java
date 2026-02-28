@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.LLResultTypes;
+import com.qualcomm.hardware.limelightvision.LLStatus;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -223,6 +224,10 @@ public class functions {
         private Pose3D latestMegaTag2Pose;
         private boolean available;
         private String status = "Disabled";
+        private String pipelineType = "unknown";
+        private int activePipelineIndex = -1;
+        private boolean connected = false;
+        private double fps = 0.0;
 
         public MegaTag2Prep(HardwareMap hardwareMap, Telemetry telemetry, String limelightName, String imuName, int pipelineId) {
             this.fallbackTelemetry = telemetry;
@@ -270,6 +275,14 @@ public class functions {
             if (!available) return;
 
             try {
+                LLStatus limelightStatus = limelight.getStatus();
+                connected = limelight.isConnected();
+                if (limelightStatus != null) {
+                    pipelineType = limelightStatus.getPipelineType();
+                    activePipelineIndex = limelightStatus.getPipelineIndex();
+                    fps = limelightStatus.getFps();
+                }
+
                 YawPitchRollAngles orientation = imu.getRobotYawPitchRollAngles();
                 limelight.updateRobotOrientation(orientation.getYaw());
                 latestResult = limelight.getLatestResult();
@@ -302,6 +315,41 @@ public class functions {
 
         public String getStatus() {
             return status;
+        }
+
+        public String getPipelineType() {
+            return pipelineType;
+        }
+
+        public int getActivePipelineIndex() {
+            return activePipelineIndex;
+        }
+
+        public boolean isConnected() {
+            return connected;
+        }
+
+        public double getFps() {
+            return fps;
+        }
+
+        public boolean isAprilTagPipelineLikely() {
+            if (pipelineType == null) return false;
+            String normalized = pipelineType.toLowerCase();
+            return normalized.contains("apriltag")
+                    || normalized.contains("fiducial")
+                    || normalized.contains("tag");
+        }
+
+        public String getPipelineValidationMessage() {
+            if (!connected) return "Limelight disconnected";
+            if (activePipelineIndex != pipelineId) {
+                return String.format("Wrong pipeline active: %d (expected %d)", activePipelineIndex, pipelineId);
+            }
+            if (!isAprilTagPipelineLikely()) {
+                return "Active pipeline is not AprilTag/Fiducial";
+            }
+            return "Pipeline OK for AprilTag";
         }
 
         public Double getSuggestedShooterDistanceInches() {
@@ -381,6 +429,11 @@ public class functions {
             Telemetry out = telemetry != null ? telemetry : fallbackTelemetry;
             if (out == null) return;
             out.addData("Limelight MT2", status);
+            out.addData("LL Connected", connected);
+            out.addData("LL Active Pipeline", activePipelineIndex);
+            out.addData("LL Pipeline Type", pipelineType);
+            out.addData("LL Pipeline Check", getPipelineValidationMessage());
+            out.addData("LL FPS", "%.1f", fps);
             if (latestResult != null) {
                 out.addData("LL tx", "%.2f", latestResult.getTx());
                 out.addData("LL ty", "%.2f", latestResult.getTy());

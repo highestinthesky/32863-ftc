@@ -16,7 +16,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 public class LimelightTuner extends OpMode {
     public static String LIMELIGHT_NAME = "limelight";
     public static String IMU_NAME = "imu";
-    public static int PIPELINE_ID = 21;
+    public static int PIPELINE_ID = 1;
     public static int POLL_RATE_HZ = 100;
 
     private Limelight3A limelight;

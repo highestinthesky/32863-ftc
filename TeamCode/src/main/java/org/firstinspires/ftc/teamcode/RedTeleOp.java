@@ -12,7 +12,7 @@ import org.firstinspires.ftc.teamcode.shooter.TurretCrServoController;
 @TeleOp(name = "RedTeleOp")
 public class RedTeleOp extends OpMode {
     private static final int GOAL_TAG_ID = 24;
-    private static final int LIMELIGHT_APRILTAG_PIPELINE = 21;
+    private static final int LIMELIGHT_APRILTAG_PIPELINE = 1;
     private static final String TURRET_RIGHT_SERVO = "rightturretturn";
     private static final String TURRET_LEFT_SERVO = "leftturretturn";
 
