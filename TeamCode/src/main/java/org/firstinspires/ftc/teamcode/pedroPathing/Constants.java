@@ -6,6 +6,7 @@ import com.pedropathing.follower.FollowerConstants;
 import com.pedropathing.ftc.FollowerBuilder;
 import com.pedropathing.ftc.drivetrains.MecanumConstants;
 import com.pedropathing.ftc.localization.Encoder;
+import com.pedropathing.ftc.localization.constants.DriveEncoderConstants;
 import com.pedropathing.ftc.localization.constants.PinpointConstants;
 import com.pedropathing.paths.PathConstraints;
 import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
@@ -15,6 +16,9 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 
 public class Constants {
+    // Keep false for current robot build: autos should not require "odo" hardware.
+    public static boolean USE_PINPOINT_LOCALIZER = false;
+
     public static FollowerConstants followerConstants = new FollowerConstants()
             //.translationalPIDFCoefficients(new PIDFCoefficients(1, 0, 0.01, 0))
             .mass(11.25)
@@ -43,14 +47,34 @@ public class Constants {
             .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD)
             .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.REVERSED);
 
+    // Encoder-only fallback localizer (uses drivetrain motor encoders, no external odo device).
+    public static DriveEncoderConstants driveEncoderLocalizerConstants = new DriveEncoderConstants()
+            .leftFrontMotorName("frontLeftMotor")
+            .leftRearMotorName("backLeftMotor")
+            .rightFrontMotorName("frontRightMotor")
+            .rightRearMotorName("backRightMotor")
+            .leftFrontEncoderDirection(Encoder.REVERSE)
+            .leftRearEncoderDirection(Encoder.REVERSE)
+            .rightFrontEncoderDirection(Encoder.FORWARD)
+            .rightRearEncoderDirection(Encoder.FORWARD)
+            // TODO: tune with Pedro tuners for best auton accuracy.
+            .forwardTicksToInches(0.022)
+            .strafeTicksToInches(0.022)
+            .turnTicksToInches(0.022)
+            .robotWidth(15.0)
+            .robotLength(15.0);
+
             
     public static PathConstraints pathConstraints = new PathConstraints(0.99, 100, 1, 1);
 
     public static Follower createFollower(HardwareMap hardwareMap) {
-        return new FollowerBuilder(followerConstants, hardwareMap)
-                .pinpointLocalizer(localizerConstants)
+        FollowerBuilder builder = new FollowerBuilder(followerConstants, hardwareMap)
                 .pathConstraints(pathConstraints)
-                .mecanumDrivetrain(driveConstants)
-                .build();
+                .mecanumDrivetrain(driveConstants);
+
+        if (USE_PINPOINT_LOCALIZER) {
+            return builder.pinpointLocalizer(localizerConstants).build();
+        }
+        return builder.driveEncoderLocalizer(driveEncoderLocalizerConstants).build();
     }
 }

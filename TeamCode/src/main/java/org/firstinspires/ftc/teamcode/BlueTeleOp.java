@@ -52,11 +52,11 @@ public class BlueTeleOp extends OpMode {
         configureHardware();
         initializeLocalizationAndVisionPrep();
 
-        turrethood = hardwareMap.get(Servo.class, "tservo");
-        turrethood.setDirection(Servo.Direction.REVERSE);
+        // turrethood = hardwareMap.get(Servo.class, "tservo");
+        // turrethood.setDirection(Servo.Direction.REVERSE);
 
-        telemetry.addLine("Initialized. Press PLAY.");
-        telemetry.update();
+        // telemetry.addLine("Initialized. Press PLAY.");
+        // telemetry.update();
     }
 
     @Override
