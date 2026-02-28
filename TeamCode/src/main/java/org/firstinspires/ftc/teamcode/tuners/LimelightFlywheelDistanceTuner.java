@@ -5,6 +5,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
 import org.firstinspires.ftc.teamcode.functions;
@@ -30,6 +31,8 @@ public class LimelightFlywheelDistanceTuner extends OpMode {
     private double manualVelocity = 1800.0;
     private double leftIntakeVelocity = LEFT_INTAKE_DEFAULT_VELOCITY;
 
+    private Servo hood;
+
     private Double lastValidDistanceInches = null;
     private Double lastValidTxDegrees = null;
 
@@ -38,6 +41,10 @@ public class LimelightFlywheelDistanceTuner extends OpMode {
         leftFlyWheel = hardwareMap.get(DcMotorEx.class, "lflywheel");
         rightFlyWheel = hardwareMap.get(DcMotorEx.class, "rflywheel");
         leftIntake = hardwareMap.get(DcMotorEx.class, "leftintake");
+
+        hood = hardwareMap.get(Servo.class, "tservo");
+        hood.setDirection(Servo.Direction.FORWARD);
+
 
         rightFlyWheel.setDirection(DcMotorEx.Direction.REVERSE);
         leftFlyWheel.setDirection(DcMotorEx.Direction.FORWARD);
@@ -64,6 +71,7 @@ public class LimelightFlywheelDistanceTuner extends OpMode {
     @Override
     public void start() {
         if (megaTag2 != null) megaTag2.start();
+        hood.setPosition(0);
     }
 
     @Override
@@ -103,6 +111,8 @@ public class LimelightFlywheelDistanceTuner extends OpMode {
         } else {
             leftIntake.setVelocity(0);
         }
+
+
 
 
         double leftVelocity = leftFlyWheel.getVelocity();
