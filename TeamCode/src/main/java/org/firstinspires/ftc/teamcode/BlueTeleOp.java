@@ -1,15 +1,20 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
+import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 
+import org.firstinspires.ftc.teamcode.shooter.AutoShotSequenceController;
 import org.firstinspires.ftc.teamcode.shooter.ShooterData;
+import org.firstinspires.ftc.teamcode.shooter.ShotControlConfig;
+import org.firstinspires.ftc.teamcode.shooter.TurretCrServoController;
 
-public abstract class MecanumTeleOpRunVer extends OpMode {
-    private static final double DEFAULT_FLYWHEEL_TARGET_VELOCITY = 6000.0;
-    private static final double RIGHT_INTAKE_FEED_VELOCITY = 1150.0;
-    private static final double RIGHT_INTAKE_REVERSE_VELOCITY = -300.0;
+@TeleOp(name = "BlueTeleOp")
+public class BlueTeleOp extends OpMode {
+    private static final int GOAL_TAG_ID = 20;
     private static final int LIMELIGHT_APRILTAG_PIPELINE = 21;
+    private static final String TURRET_RIGHT_SERVO = "rightturretturn";
+    private static final String TURRET_LEFT_SERVO = "leftturretturn";
 
     private DcMotorEx leftFrontDrive;
     private DcMotorEx rightFrontDrive;
@@ -22,27 +27,16 @@ public abstract class MecanumTeleOpRunVer extends OpMode {
     private DcMotorEx leftFlyWheel;
     private DcMotorEx rightFlyWheel;
 
-    public double manualFlywheelTargetVelocity = DEFAULT_FLYWHEEL_TARGET_VELOCITY;
-    public boolean useVisionFlywheelTarget = false;
-
-    private double activeFlywheelTargetVelocity = DEFAULT_FLYWHEEL_TARGET_VELOCITY;
     private boolean stopping = false;
     private boolean overrideMode = false;
 
-    private Double limelightShooterDistanceInches = null;
-
+    private final ShotControlConfig shotConfig = ShotControlConfig.defaultConfig();
     private final ShooterData shooterData = ShooterData.defaultTuned();
-    private final functions.TimedIntakePulse feedPulse = new functions.TimedIntakePulse(
-            RIGHT_INTAKE_FEED_VELOCITY,
-            0.8
-    );
 
     private functions.PinpointIO pinpoint;
     private functions.MegaTag2Prep megaTag2;
-
-    protected abstract String getAllianceName();
-
-    protected abstract int getGoalTagId();
+    private TurretCrServoController turretController;
+    private AutoShotSequenceController autoShotController;
 
     @Override
     public void init() {
@@ -66,10 +60,8 @@ public abstract class MecanumTeleOpRunVer extends OpMode {
 
         updateSensors();
         updateOperatorModes();
-        updateShooterTargetVelocity();
-        updateShotSequence();
+        updateAutoShotSequence();
         updateIntakeCommands();
-        updateFlywheelCommand();
         updateDrive();
         updateTelemetry();
     }
@@ -78,12 +70,18 @@ public abstract class MecanumTeleOpRunVer extends OpMode {
     public void stop() {
         stopping = true;
 
-        FaultTolerantMecanumDrive.MotorSafety.setVelocity(leftFlyWheel, 0);
-        FaultTolerantMecanumDrive.MotorSafety.setVelocity(rightFlyWheel, 0);
-        FaultTolerantMecanumDrive.MotorSafety.setVelocity(rightintake, 0);
+        if (autoShotController != null) {
+            autoShotController.stopAll();
+        } else {
+            FaultTolerantMecanumDrive.MotorSafety.setVelocity(leftFlyWheel, 0);
+            FaultTolerantMecanumDrive.MotorSafety.setVelocity(rightFlyWheel, 0);
+            FaultTolerantMecanumDrive.MotorSafety.setVelocity(rightintake, 0);
+            FaultTolerantMecanumDrive.MotorSafety.setVelocity(leftintake, 0);
+            FaultTolerantMecanumDrive.MotorSafety.setPower(rightintake, 0);
+            FaultTolerantMecanumDrive.MotorSafety.setPower(leftintake, 0);
+        }
 
-        FaultTolerantMecanumDrive.MotorSafety.setPower(rightintake, 0);
-        FaultTolerantMecanumDrive.MotorSafety.setPower(leftintake, 0);
+        if (turretController != null) turretController.stop();
 
         if (driveController != null) driveController.stopSafely();
     }
@@ -132,6 +130,19 @@ public abstract class MecanumTeleOpRunVer extends OpMode {
 
         megaTag2 = new functions.MegaTag2Prep(hardwareMap, telemetry, "limelight", "imu", LIMELIGHT_APRILTAG_PIPELINE);
         megaTag2.initializeAndConfigure();
+
+        turretController = new TurretCrServoController(hardwareMap, TURRET_RIGHT_SERVO, TURRET_LEFT_SERVO);
+        autoShotController = new AutoShotSequenceController(
+                leftFlyWheel,
+                rightFlyWheel,
+                rightintake,
+                leftintake,
+                megaTag2,
+                shooterData,
+                GOAL_TAG_ID,
+                turretController,
+                shotConfig
+        );
     }
 
     private void updateSensors() {
@@ -141,57 +152,32 @@ public abstract class MecanumTeleOpRunVer extends OpMode {
 
     private void updateOperatorModes() {
         overrideMode = gamepad2.a;
-
-        // Reuses the old flywheel Y-button slot: now toggles future vision-based targeting.
-        if (gamepad1.yWasPressed()) {
-            useVisionFlywheelTarget = !useVisionFlywheelTarget;
-        }
     }
 
-    private void updateShooterTargetVelocity() {
-        limelightShooterDistanceInches = (megaTag2 != null) ? megaTag2.getSuggestedShooterDistanceInches() : null;
-        manualFlywheelTargetVelocity = Math.max(0.0, manualFlywheelTargetVelocity);
-        activeFlywheelTargetVelocity = functions.computeShooterVelocityTarget(
-                shooterData,
-                useVisionFlywheelTarget ? limelightShooterDistanceInches : null,
-                manualFlywheelTargetVelocity
-        );
-    }
-
-    private void updateShotSequence() {
-        if (gamepad2.bWasPressed()) {
-            feedPulse.trigger(rightintake);
+    private void updateAutoShotSequence() {
+        if (autoShotController != null) {
+            autoShotController.update(gamepad2.bWasPressed(), gamepad2.xWasPressed());
         }
-        feedPulse.update(rightintake);
     }
 
     private void updateIntakeCommands() {
-        if (feedPulse.isActive()) {
-            leftintake.setPower(0.0);
+        if (autoShotController != null && autoShotController.isBusy()) {
             return;
         }
 
-        if (overrideMode && gamepad2.right_trigger > 0.1) {
-            rightintake.setVelocity(RIGHT_INTAKE_REVERSE_VELOCITY);
+        if (overrideMode && gamepad2.right_trigger > shotConfig.triggerDeadband) {
+            rightintake.setVelocity(shotConfig.intakeReverseVelocity);
             leftintake.setPower(0.0);
             return;
         }
 
         double intakePower = 0.0;
-        if (gamepad2.left_trigger > 0.1) {
-            intakePower = overrideMode ? -1.0 : 1.0;
+        if (gamepad2.left_trigger > shotConfig.triggerDeadband) {
+            intakePower = overrideMode ? shotConfig.intakeReversePower : shotConfig.intakeCollectPower;
         }
 
         rightintake.setPower(intakePower);
         leftintake.setPower(intakePower);
-    }
-
-    private void updateFlywheelCommand() {
-        if (gamepad2.right_bumper) {
-            functions.setTwoMotorsVelocity(leftFlyWheel, rightFlyWheel, activeFlywheelTargetVelocity);
-        } else {
-            functions.setTwoMotorsVelocity(leftFlyWheel, rightFlyWheel, 0.0);
-        }
     }
 
     private void updateDrive() {
@@ -204,21 +190,16 @@ public abstract class MecanumTeleOpRunVer extends OpMode {
 
     private void updateTelemetry() {
         telemetry.addLine("--------------------------------------");
-        telemetry.addData("Alliance", getAllianceName());
-        telemetry.addData("Goal Tag ID", getGoalTagId());
+        telemetry.addData("Alliance", "Blue");
+        telemetry.addData("Goal Tag ID", GOAL_TAG_ID);
         telemetry.addData("Override Mode", overrideMode);
-        telemetry.addData("Vision Flywheel Target", useVisionFlywheelTarget);
-        telemetry.addData("Shooter Distance (in)", limelightShooterDistanceInches == null ? "n/a" : String.format("%.1f", limelightShooterDistanceInches));
-        telemetry.addData("Flywheel Target Velocity", "%.1f", activeFlywheelTargetVelocity);
-        telemetry.addData("Flywheel Target Source", useVisionFlywheelTarget ? "Vision/ShooterData" : "Manual");
+        telemetry.addData("Shoot Buttons", "B=2-ball, X=3-ball");
         telemetry.addData("Flywheel PIDF", "P=%.1f I=%.1f D=%.1f F=%.1f",
                 functions.FLYWHEEL_P, functions.FLYWHEEL_I, functions.FLYWHEEL_D, functions.FLYWHEEL_F);
         telemetry.addData("Left Wheel Velocity", "%.1f", leftFlyWheel.getVelocity());
         telemetry.addData("Right Wheel Velocity", "%.1f", rightFlyWheel.getVelocity());
-        telemetry.addData("Feed Pulse Active", feedPulse.isActive());
-        if (feedPulse.isActive()) {
-            telemetry.addData("Feed Pulse t", "%.2f", feedPulse.getElapsedSeconds());
-        }
+        telemetry.addData("Intake Front Vel", "%.1f", rightintake.getVelocity());
+        telemetry.addData("Intake Transfer Vel", "%.1f", leftintake.getVelocity());
 
         if (pinpoint != null) {
             telemetry.addData("Odo X (in)", "%.1f", pinpoint.getXInches());
@@ -230,6 +211,9 @@ public abstract class MecanumTeleOpRunVer extends OpMode {
 
         if (megaTag2 != null) {
             megaTag2.addTelemetry(telemetry);
+        }
+        if (autoShotController != null) {
+            autoShotController.addTelemetry(telemetry);
         }
 
         telemetry.update();

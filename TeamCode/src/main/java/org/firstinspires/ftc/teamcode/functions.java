@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.hardware.limelightvision.LLResult;
+import com.qualcomm.hardware.limelightvision.LLResultTypes;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -15,9 +16,12 @@ import org.firstinspires.ftc.robotcore.external.Telemetry;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
+import org.firstinspires.ftc.robotcore.external.navigation.Position;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 import org.firstinspires.ftc.teamcode.lib.gobilda.GoBildaPinpointDriver;
 import org.firstinspires.ftc.teamcode.shooter.ShooterData;
+
+import java.util.List;
 
 public class functions {
     public static final double SERVO_MAX_ANGLE_DEGREES = 300.0;
@@ -27,10 +31,10 @@ public class functions {
     public static final double FLYWHEEL_D = 0.0;
     public static final double FLYWHEEL_F = 7.0;
 
-    public static final double RAMP_WHEEL_P = 4.0;
-    public static final double RAMP_WHEEL_I = 0.0;
-    public static final double RAMP_WHEEL_D = 0.0;
-    public static final double RAMP_WHEEL_F = 20.0;
+    public static final double INTAKE_P = 6.0;
+    public static final double INTAKE_I = 0.0;
+    public static final double INTAKE_D = 0.0;
+    public static final double INTAKE_F = 4.0;
 
     public static double getMotorExTPS(DcMotorEx motor) {
         return motor.getVelocity();
@@ -52,8 +56,8 @@ public class functions {
         return new PIDFCoefficients(FLYWHEEL_P, FLYWHEEL_I, FLYWHEEL_D, FLYWHEEL_F);
     }
 
-    public static PIDFCoefficients newRampWheelPidf() {
-        return new PIDFCoefficients(RAMP_WHEEL_P, RAMP_WHEEL_I, RAMP_WHEEL_D, RAMP_WHEEL_F);
+    public static PIDFCoefficients newIntakePidf() {
+        return new PIDFCoefficients(INTAKE_P, INTAKE_I, INTAKE_D, INTAKE_F);
     }
 
     public static void applyFlywheelPidf(DcMotorEx leftFlyWheel, DcMotorEx rightFlyWheel) {
@@ -63,9 +67,9 @@ public class functions {
         rightFlyWheel.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidf);
     }
 
-    public static void applyRampWheelPidf(DcMotorEx rampWheelMotor) {
-        if (rampWheelMotor == null) return;
-        rampWheelMotor.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, newRampWheelPidf());
+    public static void applyIntakePidf(DcMotorEx intakeMotor) {
+        if (intakeMotor == null) return;
+        intakeMotor.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, newIntakePidf());
     }
 
     public static void setTwoMotorsVelocity(DcMotorEx motorA, DcMotorEx motorB, double velocity) {
@@ -133,70 +137,41 @@ public class functions {
         rightintake.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
         leftintake.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
 
-        PIDFCoefficients intakePidf = new PIDFCoefficients(6, 0, 0, 4);
+        PIDFCoefficients intakePidf = newIntakePidf();
         rightintake.setPIDFCoefficients(DcMotorEx.RunMode.RUN_USING_ENCODER, intakePidf);
         leftintake.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, intakePidf);
     }
 
-    public static class TimedShotSequence {
+    public static class TimedIntakePulse {
         private final ElapsedTime timer = new ElapsedTime();
-        private final double indexerUpAngleDegrees;
-        private final double indexerDownAngleDegrees;
-        private final double rampVelocity;
-        private final double indexerDownStartSec;
-        private final double stopRampAtSec;
+        private final double intakeVelocity;
+        private final double stopAtSec;
 
         private boolean active = false;
-        private double currentIndexerTargetDegrees;
 
-        public TimedShotSequence(double indexerUpAngleDegrees,
-                                 double indexerDownAngleDegrees,
-                                 double rampVelocity,
-                                 double indexerDownStartSec,
-                                 double stopRampAtSec) {
-            this.indexerUpAngleDegrees = indexerUpAngleDegrees;
-            this.indexerDownAngleDegrees = indexerDownAngleDegrees;
-            this.rampVelocity = rampVelocity;
-            this.indexerDownStartSec = indexerDownStartSec;
-            this.stopRampAtSec = stopRampAtSec;
-            this.currentIndexerTargetDegrees = indexerDownAngleDegrees;
+        public TimedIntakePulse(double intakeVelocity, double stopAtSec) {
+            this.intakeVelocity = intakeVelocity;
+            this.stopAtSec = stopAtSec;
         }
 
-        public void trigger(DcMotorEx rampWheelMotor) {
-            applyRampWheelPidf(rampWheelMotor);
-            if (rampWheelMotor != null) rampWheelMotor.setVelocity(rampVelocity);
-            currentIndexerTargetDegrees = indexerUpAngleDegrees;
+        public void trigger(DcMotorEx intakeMotor) {
+            if (intakeMotor != null) intakeMotor.setVelocity(intakeVelocity);
             timer.reset();
             active = true;
         }
 
-        public void update(DcMotorEx rampWheelMotor, Servo leftIndexer, Servo rightIndexer) {
+        public void update(DcMotorEx intakeMotor) {
             if (active) {
                 double elapsed = timer.seconds();
-                if (elapsed >= indexerDownStartSec) {
-                    currentIndexerTargetDegrees = indexerDownAngleDegrees;
-                }
-                if (elapsed >= stopRampAtSec) {
-                    if (rampWheelMotor != null) rampWheelMotor.setVelocity(0.0);
+                if (elapsed >= stopAtSec) {
+                    if (intakeMotor != null) intakeMotor.setVelocity(0.0);
                     active = false;
                 }
             }
-
-            setDualServoAngle(leftIndexer, rightIndexer, currentIndexerTargetDegrees);
-        }
-
-        public void resetToDown(Servo leftIndexer, Servo rightIndexer) {
-            active = false;
-            currentIndexerTargetDegrees = indexerDownAngleDegrees;
-            setDualServoAngle(leftIndexer, rightIndexer, currentIndexerTargetDegrees);
         }
 
         public boolean isActive() {
             return active;
-        }
-
-        public double getCurrentIndexerTargetDegrees() {
-            return currentIndexerTargetDegrees;
         }
 
         public double getElapsedSeconds() {
@@ -330,8 +305,76 @@ public class functions {
         }
 
         public Double getSuggestedShooterDistanceInches() {
-            // TODO: Convert MegaTag2 robot pose to distance from a field target.
+            LLResultTypes.FiducialResult fiducial = getFirstFiducial();
+            return computeHorizontalDistanceInches(fiducial);
+        }
+
+        public Double getGoalTagHorizontalDistanceInches(int goalTagId) {
+            LLResultTypes.FiducialResult fiducial = getFiducialById(goalTagId);
+            return computeHorizontalDistanceInches(fiducial);
+        }
+
+        public Double getGoalTagTxDegrees(int goalTagId) {
+            LLResultTypes.FiducialResult fiducial = getFiducialById(goalTagId);
+            if (fiducial == null) return null;
+            return fiducial.getTargetXDegrees();
+        }
+
+        public boolean hasGoalTag(int goalTagId) {
+            return getFiducialById(goalTagId) != null;
+        }
+
+        public String getGoalTagStatus(int goalTagId) {
+            if (!available) return "Limelight unavailable";
+            if (latestResult == null) return "No Limelight result";
+            if (!latestResult.isValid()) return "Invalid Limelight result";
+
+            LLResultTypes.FiducialResult fiducial = getFiducialById(goalTagId);
+            if (fiducial == null) return "Goal tag " + goalTagId + " not found";
+
+            Double distanceInches = computeHorizontalDistanceInches(fiducial);
+            if (distanceInches == null) return "Goal tag " + goalTagId + " pose unavailable";
+
+            return String.format("Goal tag %d found (%.1f in)", goalTagId, distanceInches);
+        }
+
+        private LLResultTypes.FiducialResult getFirstFiducial() {
+            if (latestResult == null || !latestResult.isValid()) return null;
+            List<LLResultTypes.FiducialResult> fiducials = latestResult.getFiducialResults();
+            if (fiducials == null || fiducials.isEmpty()) return null;
+            return fiducials.get(0);
+        }
+
+        private LLResultTypes.FiducialResult getFiducialById(int goalTagId) {
+            if (latestResult == null || !latestResult.isValid()) return null;
+            List<LLResultTypes.FiducialResult> fiducials = latestResult.getFiducialResults();
+            if (fiducials == null || fiducials.isEmpty()) return null;
+
+            for (LLResultTypes.FiducialResult fiducial : fiducials) {
+                if (fiducial != null && fiducial.getFiducialId() == goalTagId) {
+                    return fiducial;
+                }
+            }
             return null;
+        }
+
+        private Double computeHorizontalDistanceInches(LLResultTypes.FiducialResult fiducial) {
+            if (fiducial == null) return null;
+            try {
+                Pose3D targetPose = fiducial.getTargetPoseCameraSpace();
+                if (targetPose == null) return null;
+                Position cameraSpacePosition = targetPose.getPosition();
+                if (cameraSpacePosition == null) return null;
+
+                Position inchesPosition = cameraSpacePosition.toUnit(DistanceUnit.INCH);
+                double x = inchesPosition.x;
+                double z = inchesPosition.z;
+                double distance = Math.hypot(x, z);
+                if (Double.isNaN(distance) || Double.isInfinite(distance)) return null;
+                return distance;
+            } catch (Exception ignored) {
+                return null;
+            }
         }
 
         public void addTelemetry(Telemetry telemetry) {
