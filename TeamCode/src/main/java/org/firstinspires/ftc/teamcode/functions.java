@@ -215,6 +215,8 @@ public class functions {
     }
 
     public static class MegaTag2Prep {
+        private static final int LIMELIGHT_POLL_RATE_HZ = 50;
+
         private final Telemetry fallbackTelemetry;
         private int expectedPipelineId;
 
@@ -246,6 +248,7 @@ public class functions {
         public void initializeAndConfigure() {
             if (!available) return;
             try {
+                limelight.setPollRateHz(LIMELIGHT_POLL_RATE_HZ);
                 limelight.pipelineSwitch(expectedPipelineId);
                 RevHubOrientationOnRobot orientationOnRobot = new RevHubOrientationOnRobot(
                         RevHubOrientationOnRobot.LogoFacingDirection.UP,

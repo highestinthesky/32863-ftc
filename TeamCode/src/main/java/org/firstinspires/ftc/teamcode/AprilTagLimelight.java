@@ -11,12 +11,15 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 @Autonomous
 public class AprilTagLimelight extends OpMode {
+    private static final int LIMELIGHT_POLL_RATE_HZ = 50;
+
     private Limelight3A limelight;
     private IMU imu;
 
     @Override
     public void init() {
         limelight = hardwareMap.get(Limelight3A.class, "limelight");
+        limelight.setPollRateHz(LIMELIGHT_POLL_RATE_HZ);
         limelight.pipelineSwitch(1);
         imu = hardwareMap.get(IMU.class, "imu");
         RevHubOrientationOnRobot revHubOrientationOnRobot = new RevHubOrientationOnRobot(

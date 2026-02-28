@@ -7,7 +7,6 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 
 import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
 import org.firstinspires.ftc.teamcode.functions;
-import org.firstinspires.ftc.teamcode.shooter.ShooterData;
 
 @TeleOp(name = "LimelightFlywheelDistanceTuner", group = "Tuners")
 public class LimelightFlywheelDistanceTuner extends OpMode {
@@ -23,7 +22,6 @@ public class LimelightFlywheelDistanceTuner extends OpMode {
     private DcMotorEx leftFlyWheel;
     private DcMotorEx rightFlyWheel;
     private functions.MegaTag2Prep megaTag2;
-    private final ShooterData shooterData = ShooterData.defaultTuned();
 
     private int goalTagId = BLUE_GOAL_TAG_ID;
     private boolean spinEnabled = false;
@@ -78,8 +76,6 @@ public class LimelightFlywheelDistanceTuner extends OpMode {
         if (distanceInches != null) lastValidDistanceInches = distanceInches;
         if (txDegrees != null) lastValidTxDegrees = txDegrees;
 
-        // This tuner is intended for manually finding velocity for each measured distance.
-        double interpolatedVelocity = functions.computeShooterVelocityTarget(shooterData, distanceInches, manualVelocity);
         double commandVelocity = manualVelocity;
 
         if (spinEnabled) {
@@ -95,24 +91,19 @@ public class LimelightFlywheelDistanceTuner extends OpMode {
         double totalCurrent = leftFlyWheel.getCurrent(CurrentUnit.AMPS) + rightFlyWheel.getCurrent(CurrentUnit.AMPS);
 
         telemetry.addLine("----- Limelight + Flywheel Distance Tuner -----");
-        telemetry.addData("Goal Tag ID", goalTagId);
-        telemetry.addData("Expected Pipeline", getPipelineForGoalTag(goalTagId));
-        telemetry.addData("Active Pipeline", megaTag2 != null ? megaTag2.getActivePipelineIndex() : -1);
-        telemetry.addData("Tag Status", megaTag2 != null ? megaTag2.getGoalTagStatus(goalTagId) : "n/a");
-        telemetry.addData("Pipeline Check", megaTag2 != null ? megaTag2.getPipelineValidationMessage() : "n/a");
-        telemetry.addData("Distance (in) [LIVE]", distanceInches == null ? "n/a" : String.format("%.2f", distanceInches));
-        telemetry.addData("tx (deg) [LIVE]", txDegrees == null ? "n/a" : String.format("%.2f", txDegrees));
-        telemetry.addData("Distance (in) [LAST]", lastValidDistanceInches == null ? "n/a" : String.format("%.2f", lastValidDistanceInches));
-        telemetry.addData("tx (deg) [LAST]", lastValidTxDegrees == null ? "n/a" : String.format("%.2f", lastValidTxDegrees));
+        telemetry.addData("Tag", goalTagId);
+        telemetry.addData("Pipeline", "%d (exp) / %d (active)",
+                getPipelineForGoalTag(goalTagId),
+                megaTag2 != null ? megaTag2.getActivePipelineIndex() : -1);
+        telemetry.addData("Vision", megaTag2 != null ? megaTag2.getPipelineValidationMessage() : "n/a");
+        telemetry.addData("Distance in", distanceInches == null ? "n/a" : String.format("%.2f", distanceInches));
+        telemetry.addData("Last Dist in", lastValidDistanceInches == null ? "n/a" : String.format("%.2f", lastValidDistanceInches));
 
-        telemetry.addData("Spin Enabled", spinEnabled);
-        telemetry.addData("Step Size", "%.1f", stepSizes[stepIndex]);
-        telemetry.addData("Manual Velocity", "%.1f", manualVelocity);
-        telemetry.addData("ShooterData Suggestion", "%.1f", interpolatedVelocity);
-        telemetry.addData("Command Velocity", "%.1f", commandVelocity);
-        telemetry.addData("Left Wheel Velocity", "%.1f", leftVelocity);
-        telemetry.addData("Right Wheel Velocity", "%.1f", rightVelocity);
-        telemetry.addData("Total Current (A)", "%.2f", totalCurrent);
+        telemetry.addData("Spin", spinEnabled);
+        telemetry.addData("Step", "%.1f", stepSizes[stepIndex]);
+        telemetry.addData("Set Vel", "%.1f", manualVelocity);
+        telemetry.addData("L/R Vel", "%.1f / %.1f", leftVelocity, rightVelocity);
+        telemetry.addData("Current A", "%.2f", totalCurrent);
 
         Double distanceForTemplate = distanceInches != null ? distanceInches : lastValidDistanceInches;
         if (distanceForTemplate != null) {
@@ -120,9 +111,6 @@ public class LimelightFlywheelDistanceTuner extends OpMode {
             telemetry.addData("Template", "data.put(%.1f, %.0f);", distanceForTemplate, commandVelocity);
         }
 
-        if (megaTag2 != null) {
-            megaTag2.addTelemetry(telemetry);
-        }
         telemetry.update();
     }
 
