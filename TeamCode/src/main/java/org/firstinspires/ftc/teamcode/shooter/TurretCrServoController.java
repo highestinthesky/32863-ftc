@@ -36,7 +36,7 @@ public class TurretCrServoController {
             rightTurret = hardwareMap.get(CRServo.class, rightServoName);
             leftTurret = hardwareMap.get(CRServo.class, leftServoName);
 
-            rightTurret.setDirection(DcMotorSimple.Direction.REVERSE);
+            rightTurret.setDirection(DcMotorSimple.Direction.FORWARD);
             leftTurret.setDirection(DcMotorSimple.Direction.FORWARD);
             setPower(0.0);
 
