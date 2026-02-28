@@ -75,7 +75,7 @@ public class ShooterData {
         data.put(20.0, 1700);
         data.put(30.0, 1900);
         data.put(40.0, 2100);
-        data.put(53.0, 2200);
+        data.put(53.0, 2220);
         data.put(66.0, 2300);
         data.put(80.0, 2400);
 

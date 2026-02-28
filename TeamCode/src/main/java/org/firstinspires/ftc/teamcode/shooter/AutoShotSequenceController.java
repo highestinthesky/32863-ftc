@@ -39,9 +39,12 @@ public class AutoShotSequenceController {
     private final ElapsedTime loopTimer = new ElapsedTime();
     private final ElapsedTime stateTimer = new ElapsedTime();
     private final ElapsedTime readyTimer = new ElapsedTime();
+    private final ElapsedTime chargedUpTimer = new ElapsedTime();
 
     private double lastLoopSeconds = 0.0;
     private boolean readyWindowActive = false;
+    private boolean chargedUpWindowActive = false;
+    private boolean flywheelChargedUp = false;
 
     private State state = State.IDLE;
     private SequenceType activeSequence = SequenceType.NONE;
@@ -94,6 +97,7 @@ public class AutoShotSequenceController {
             } else if (threeBallPressed) {
                 startSequence(SequenceType.THREE_BALL);
             }
+            updateFlywheelChargedUpStatus();
             return;
         }
 
@@ -129,6 +133,8 @@ public class AutoShotSequenceController {
             default:
                 break;
         }
+
+        updateFlywheelChargedUpStatus();
     }
 
     public boolean isBusy() {
@@ -141,6 +147,8 @@ public class AutoShotSequenceController {
         forceStopIntakes();
         setFlywheelVelocity(0.0);
         if (turret != null) turret.stop();
+        chargedUpWindowActive = false;
+        flywheelChargedUp = false;
         status = "Stopped";
     }
 
@@ -150,6 +158,10 @@ public class AutoShotSequenceController {
 
     public String getStatus() {
         return status;
+    }
+
+    public boolean isFlywheelChargedUp() {
+        return flywheelChargedUp;
     }
 
     public String getAbortReason() {
@@ -209,6 +221,8 @@ public class AutoShotSequenceController {
         targetVelocity = 0.0;
         commandedFlywheelVelocity = config.flywheelIdleVelocity;
         readyWindowActive = false;
+        chargedUpWindowActive = false;
+        flywheelChargedUp = false;
         lostTagFrameCount = 0;
         centeredFrameCount = 0;
         lockFrameCount = 0;
@@ -509,6 +523,8 @@ public class AutoShotSequenceController {
 
     private void finishSequence() {
         setFlywheelVelocity(config.flywheelIdleVelocity);
+        chargedUpWindowActive = false;
+        flywheelChargedUp = false;
         activeSequence = SequenceType.NONE;
         state = State.IDLE;
         status = abortReason.isEmpty() ? "Idle" : "Idle after abort";
@@ -571,6 +587,34 @@ public class AutoShotSequenceController {
             leftIntakeTransfer.setVelocity(0.0);
             leftIntakeTransfer.setPower(0.0);
         }
+    }
+
+    private void updateFlywheelChargedUpStatus() {
+        // "Charged up" should only indicate shoot-ready speed above idle.
+        double commandAbs = Math.abs(commandedFlywheelVelocity);
+        double idleAbs = Math.abs(config.flywheelIdleVelocity);
+        double minShotTarget = idleAbs + Math.max(100.0, config.flywheelReadyTolerance * 0.5);
+        boolean shotTargetActive = commandAbs >= minShotTarget;
+        boolean withinTolerance = shotTargetActive && areFlywheelsWithinTolerance(commandAbs, config.flywheelReadyTolerance);
+
+        if (withinTolerance) {
+            if (!chargedUpWindowActive) {
+                chargedUpWindowActive = true;
+                chargedUpTimer.reset();
+            }
+        } else {
+            chargedUpWindowActive = false;
+        }
+
+        flywheelChargedUp = chargedUpWindowActive
+                && chargedUpTimer.seconds() >= config.flywheelReadySettleSeconds;
+    }
+
+    private boolean areFlywheelsWithinTolerance(double targetAbsVelocity, double tolerance) {
+        double leftSpeed = Math.abs(leftFlyWheel.getVelocity());
+        double rightSpeed = Math.abs(rightFlyWheel.getVelocity());
+        return Math.abs(leftSpeed - targetAbsVelocity) <= tolerance
+                && Math.abs(rightSpeed - targetAbsVelocity) <= tolerance;
     }
 
     private boolean requiresPreFeedRealign() {

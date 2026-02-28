@@ -15,6 +15,7 @@ public class FaultTolerantMecanumDrive {
     private String faultEventMsg = "";
     private int faultEventLoopsLeft = 0;
     private boolean stopping = false;
+    private boolean faultModeEnabled = false;
 
     private static final double CMD_MIN = 0.35;
     private static final double VEL_ABS_MIN = 120.0;
@@ -83,6 +84,7 @@ public class FaultTolerantMecanumDrive {
         prevMax = 0.275;
         faultEventMsg = "";
         faultEventLoopsLeft = 0;
+        clearAllMotorHealth();
     }
 
     public void stopSafely() {
@@ -96,6 +98,18 @@ public class FaultTolerantMecanumDrive {
         MotorSafety.setZeroPowerBehavior(rightFrontDrive, DcMotor.ZeroPowerBehavior.BRAKE);
         MotorSafety.setZeroPowerBehavior(leftBackDrive, DcMotor.ZeroPowerBehavior.BRAKE);
         MotorSafety.setZeroPowerBehavior(rightBackDrive, DcMotor.ZeroPowerBehavior.BRAKE);
+    }
+
+    public void setFaultModeEnabled(boolean enabled) {
+        if (faultModeEnabled == enabled) return;
+        faultModeEnabled = enabled;
+        faultEventMsg = "";
+        faultEventLoopsLeft = 0;
+        clearAllMotorHealth();
+    }
+
+    public boolean isFaultModeEnabled() {
+        return faultModeEnabled;
     }
 
     private void updateHealth(MotorHealth h, DcMotorEx m, double cmd, double vel, double maxVel) {
@@ -126,6 +140,20 @@ public class FaultTolerantMecanumDrive {
         }
     }
 
+    private void clearHealth(MotorHealth h, DcMotorEx m) {
+        h.badLoops = 0;
+        h.goodLoops = 0;
+        h.failed = false;
+        MotorSafety.setZeroPowerBehavior(m, DcMotor.ZeroPowerBehavior.BRAKE);
+    }
+
+    private void clearAllMotorHealth() {
+        clearHealth(lfHealth, leftFrontDrive);
+        clearHealth(rfHealth, rightFrontDrive);
+        clearHealth(lbHealth, leftBackDrive);
+        clearHealth(rbHealth, rightBackDrive);
+    }
+
     public void move(double drive, double strafe, double turn) {
         if (stopping) return;
 
@@ -154,57 +182,65 @@ public class FaultTolerantMecanumDrive {
             rb /= detMax;
         }
 
-        updateHealth(lfHealth, leftFrontDrive, lf, vLF, maxV);
-        updateHealth(rfHealth, rightFrontDrive, rf, vRF, maxV);
-        updateHealth(lbHealth, leftBackDrive, lb, vLB, maxV);
-        updateHealth(rbHealth, rightBackDrive, rb, vRB, maxV);
+        boolean lfOk = true;
+        boolean rfOk = true;
+        boolean lbOk = true;
+        boolean rbOk = true;
+        int failedCount = 0;
 
-        boolean lfOk = !lfHealth.failed;
-        boolean rfOk = !rfHealth.failed;
-        boolean lbOk = !lbHealth.failed;
-        boolean rbOk = !rbHealth.failed;
+        if (faultModeEnabled) {
+            updateHealth(lfHealth, leftFrontDrive, lf, vLF, maxV);
+            updateHealth(rfHealth, rightFrontDrive, rf, vRF, maxV);
+            updateHealth(lbHealth, leftBackDrive, lb, vLB, maxV);
+            updateHealth(rbHealth, rightBackDrive, rb, vRB, maxV);
 
-        int failedCount = (lfOk ? 0 : 1) + (rfOk ? 0 : 1) + (lbOk ? 0 : 1) + (rbOk ? 0 : 1);
+            lfOk = !lfHealth.failed;
+            rfOk = !rfHealth.failed;
+            lbOk = !lbHealth.failed;
+            rbOk = !rbHealth.failed;
 
-        if (!prevLfFailed && lfHealth.failed) {
-            faultEventMsg = "Front Left motor is currently offline and the system has adjusted.";
-            faultEventLoopsLeft = 30;
-        } else if (!prevRfFailed && rfHealth.failed) {
-            faultEventMsg = "Front Right motor is currently offline and the system has adjusted.";
-            faultEventLoopsLeft = 30;
-        } else if (!prevLbFailed && lbHealth.failed) {
-            faultEventMsg = "Back Left motor is currently offline and the system has adjusted.";
-            faultEventLoopsLeft = 30;
-        } else if (!prevRbFailed && rbHealth.failed) {
-            faultEventMsg = "Back Right motor is currently offline and the system has adjusted.";
-            faultEventLoopsLeft = 30;
-        }
+            failedCount = (lfOk ? 0 : 1) + (rfOk ? 0 : 1) + (lbOk ? 0 : 1) + (rbOk ? 0 : 1);
 
-        if (failedCount == 1) {
-            double d = drive;
-            double s = strafe;
-            double t = turn;
+            if (!prevLfFailed && lfHealth.failed) {
+                faultEventMsg = "Front Left motor is currently offline and the system has adjusted.";
+                faultEventLoopsLeft = 30;
+            } else if (!prevRfFailed && rfHealth.failed) {
+                faultEventMsg = "Front Right motor is currently offline and the system has adjusted.";
+                faultEventLoopsLeft = 30;
+            } else if (!prevLbFailed && lbHealth.failed) {
+                faultEventMsg = "Back Left motor is currently offline and the system has adjusted.";
+                faultEventLoopsLeft = 30;
+            } else if (!prevRbFailed && rbHealth.failed) {
+                faultEventMsg = "Back Right motor is currently offline and the system has adjusted.";
+                faultEventLoopsLeft = 30;
+            }
 
-            if (!lfOk) {
-                lf = 0;
-                rf = 2 * (s + t);
-                lb = 2 * (d - t);
-                rb = 2 * (d - s);
-            } else if (!rfOk) {
-                rf = 0;
-                lf = -2 * (s + t);
-                lb = 2 * (d + s);
-                rb = 2 * (d + t);
-            } else if (!lbOk) {
-                lb = 0;
-                lf = 2 * (d - t);
-                rf = 2 * (d + s);
-                rb = 2 * (t - s);
-            } else {
-                rb = 0;
-                lf = 2 * (d - s);
-                rf = 2 * (d + t);
-                lb = 2 * (s - t);
+            if (failedCount == 1) {
+                double d = drive;
+                double s = strafe;
+                double t = turn;
+
+                if (!lfOk) {
+                    lf = 0;
+                    rf = 2 * (s + t);
+                    lb = 2 * (d - t);
+                    rb = 2 * (d - s);
+                } else if (!rfOk) {
+                    rf = 0;
+                    lf = -2 * (s + t);
+                    lb = 2 * (d + s);
+                    rb = 2 * (d + t);
+                } else if (!lbOk) {
+                    lb = 0;
+                    lf = 2 * (d - t);
+                    rf = 2 * (d + s);
+                    rb = 2 * (t - s);
+                } else {
+                    rb = 0;
+                    lf = 2 * (d - s);
+                    rf = 2 * (d + t);
+                    lb = 2 * (s - t);
+                }
             }
         }
 
@@ -238,12 +274,12 @@ public class FaultTolerantMecanumDrive {
         MotorSafety.setPower(leftBackDrive, lb);
         MotorSafety.setPower(rightBackDrive, rb);
 
-        if (faultEventLoopsLeft > 0) {
+        if (faultModeEnabled && faultEventLoopsLeft > 0) {
             telemetry.addLine(faultEventMsg);
             faultEventLoopsLeft--;
         }
 
-        if (failedCount > 0) {
+        if (faultModeEnabled && failedCount > 0) {
             String offline =
                     (!lfOk ? "Front Left" :
                             !rfOk ? "Front Right" :
@@ -252,6 +288,7 @@ public class FaultTolerantMecanumDrive {
             telemetry.addLine(offline + " motor is currently offline (fault mode active).");
         }
 
+        telemetry.addData("FaultMode", faultModeEnabled ? "ON" : "OFF");
         telemetry.addData("DriveVel", "LF %.0f RF %.0f LB %.0f RB %.0f", vLF, vRF, vLB, vRB);
     }
 }

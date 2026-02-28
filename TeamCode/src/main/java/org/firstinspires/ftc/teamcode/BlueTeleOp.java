@@ -41,6 +41,7 @@ public class BlueTeleOp extends OpMode {
     private double commandedLeftIntakePower = Double.NaN;
     private double commandedRightIntakePower = Double.NaN;
     private boolean goalTagDetected = false;
+    private boolean faultModeEnabled = false;
 
     @Override
     public void init() {
@@ -59,6 +60,7 @@ public class BlueTeleOp extends OpMode {
         commandedLeftIntakePower = Double.NaN;
         commandedRightIntakePower = Double.NaN;
         if (driveController != null) driveController.resetForStart();
+        if (driveController != null) driveController.setFaultModeEnabled(faultModeEnabled);
         if (megaTag2 != null) megaTag2.start();
     }
 
@@ -69,6 +71,7 @@ public class BlueTeleOp extends OpMode {
         updateSensors();
         updateAutoShotSequence();
         updateIntakeCommands();
+        updateDriveFaultModeToggle();
         updateDrive();
         updateTelemetry();
     }
@@ -157,7 +160,7 @@ public class BlueTeleOp extends OpMode {
 
     private void updateAutoShotSequence() {
         if (autoShotController != null) {
-            autoShotController.update(gamepad2.bWasPressed(), gamepad2.xWasPressed());
+            autoShotController.update(gamepad2.bWasPressed(), false);
         }
     }
 
@@ -179,9 +182,13 @@ public class BlueTeleOp extends OpMode {
         telemetry.addLine("--------------------------------------");
         telemetry.addData("Alliance", "Blue");
         telemetry.addData("Goal Tag ID", GOAL_TAG_ID);
-        telemetry.addData("Shoot Buttons", "B=2-ball, X=3-ball");
+        telemetry.addData("Shoot Buttons", "B=shoot, X=disabled");
+        telemetry.addData("Fault Mode", "%s (Y toggles)", faultModeEnabled ? "ON" : "OFF");
         telemetry.addData("Intake Controls", "LT/LB=left in/out, RT/RB=right in/out");
         telemetry.addData("AprilTag Detected", goalTagDetected);
+        if (autoShotController != null && autoShotController.isFlywheelChargedUp()) {
+            telemetry.addLine("Flywheel charged up");
+        }
 
         if (megaTag2 != null) {
             megaTag2.addTelemetry(telemetry);
@@ -212,5 +219,11 @@ public class BlueTeleOp extends OpMode {
 
     private static double applyDeadband(double value, double deadband) {
         return Math.abs(value) >= Math.abs(deadband) ? value : 0.0;
+    }
+
+    private void updateDriveFaultModeToggle() {
+        if (!gamepad1.yWasPressed()) return;
+        faultModeEnabled = !faultModeEnabled;
+        if (driveController != null) driveController.setFaultModeEnabled(faultModeEnabled);
     }
 }
