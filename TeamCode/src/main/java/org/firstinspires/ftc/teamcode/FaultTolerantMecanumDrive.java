@@ -173,6 +173,7 @@ public class FaultTolerantMecanumDrive {
         double lb = drive + strafe - turn;
         double rb = drive - strafe + turn;
 
+
         double detMax = Math.max(Math.max(Math.abs(lf), Math.abs(rf)),
                 Math.max(Math.abs(lb), Math.abs(rb)));
         if (detMax > 1.0) {

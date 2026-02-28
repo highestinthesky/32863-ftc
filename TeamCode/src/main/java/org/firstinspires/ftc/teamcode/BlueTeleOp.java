@@ -52,11 +52,11 @@ public class BlueTeleOp extends OpMode {
         configureHardware();
         initializeLocalizationAndVisionPrep();
 
-        // turrethood = hardwareMap.get(Servo.class, "tservo");
-        // turrethood.setDirection(Servo.Direction.REVERSE);
+         turrethood = hardwareMap.get(Servo.class, "tservo");
+         turrethood.setDirection(Servo.Direction.REVERSE);
 
-        // telemetry.addLine("Initialized. Press PLAY.");
-        // telemetry.update();
+         telemetry.addLine("Initialized. Press PLAY.");
+         telemetry.update();
     }
 
     @Override
@@ -179,9 +179,9 @@ public class BlueTeleOp extends OpMode {
     }
 
     private void updateDrive() {
-        double drive = applyDeadband(-gamepad1.left_stick_y, DRIVE_STICK_DEADBAND);
-        double strafe = applyDeadband(-gamepad1.left_stick_x, DRIVE_STICK_DEADBAND);
-        double turn = applyDeadband(-gamepad1.right_stick_x, DRIVE_STICK_DEADBAND);
+        double drive = -gamepad1.left_stick_y;
+        double strafe = -gamepad1.left_stick_x;
+        double turn = -gamepad1.right_stick_x;
 
         if (driveController != null) driveController.move(drive, strafe, turn);
     }
