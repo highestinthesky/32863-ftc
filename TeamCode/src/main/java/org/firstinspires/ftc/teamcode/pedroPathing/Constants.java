@@ -21,7 +21,7 @@ public class Constants {
 
     public static FollowerConstants followerConstants = new FollowerConstants()
             //.translationalPIDFCoefficients(new PIDFCoefficients(1, 0, 0.01, 0))
-            .mass(11.25)
+            .mass(12)
             .forwardZeroPowerAcceleration(-24.25)
             .lateralZeroPowerAcceleration(-47.01);
     public static MecanumConstants driveConstants = new MecanumConstants()
