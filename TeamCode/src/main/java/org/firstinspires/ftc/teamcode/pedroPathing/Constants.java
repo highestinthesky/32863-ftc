@@ -39,8 +39,8 @@ public class Constants {
             .rightRearMotorDirection(DcMotorSimple.Direction.FORWARD);
 
     public static PinpointConstants localizerConstants = new PinpointConstants()
-            .forwardPodY(0.0)
-            .strafePodX(2.25)
+            .forwardPodY(1.0)
+            .strafePodX(7.5)
             .distanceUnit(DistanceUnit.INCH)
             .hardwareMapName("odo")
             .encoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD)
@@ -58,11 +58,11 @@ public class Constants {
             .rightFrontEncoderDirection(Encoder.FORWARD)
             .rightRearEncoderDirection(Encoder.FORWARD)
             // TODO: tune with Pedro tuners for best auton accuracy.
-            .forwardTicksToInches(0.022)
-            .strafeTicksToInches(0.022)
-            .turnTicksToInches(0.022)
+            .forwardTicksToInches(0.009828908024)
+            .strafeTicksToInches(0.3765195312)
+            .turnTicksToInches(-0.02230508038)
             .robotWidth(12.0)
-            .robotLength(8.0);
+            .robotLength(8.0)
 
             
     public static PathConstraints pathConstraints = new PathConstraints(0.99, 100, 1, 1);
