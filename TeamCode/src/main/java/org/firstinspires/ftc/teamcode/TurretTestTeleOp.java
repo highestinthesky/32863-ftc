@@ -11,8 +11,11 @@ import com.qualcomm.robotcore.hardware.Servo;
 import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
 
 @TeleOp
-public class MecanumTeleOpTest extends OpMode {
+public class TurretTestTeleOp extends OpMode {
 
+    private DcMotorEx leftFlyWheel; 
+    private DcMotorEx rightFlyWheel; 
+    
     private DcMotorEx leftFrontDrive;
     private DcMotorEx rightFrontDrive;
     private DcMotorEx leftBackDrive;
@@ -37,6 +40,9 @@ public class MecanumTeleOpTest extends OpMode {
     @Override
     public void init() {
         // chassis motors setup
+        leftFlyWheel = hardwareMap.get(DcMotorEx.class, "lflywheel");
+        rightFlyWheel = hardwareMap.get(DcMotorEx.class, "rflywheel");
+        
         leftFrontDrive  = hardwareMap.get(DcMotorEx.class, "frontLeftMotor");
         rightFrontDrive = hardwareMap.get(DcMotorEx.class, "frontRightMotor");
         leftBackDrive   = hardwareMap.get(DcMotorEx.class, "backLeftMotor");
@@ -98,66 +104,10 @@ public class MecanumTeleOpTest extends OpMode {
 
     @Override
     public void loop() {
-        double drive  = -gamepad1.left_stick_y;
-        double strafe = -gamepad1.left_stick_x;
-        double turn   = -gamepad1.right_stick_x;
-
-        if (driveController != null) driveController.move(drive, strafe, turn);
-
-
-        int action = 0;
-        if (gamepad1.bWasPressed()) action = 1;
-        else if (gamepad1.dpadLeftWasPressed()) action = 2;
-        else if (gamepad1.dpadRightWasPressed()) action = 3;
-        else if (gamepad1.left_trigger > 0.4) action = 4;
-        else if (gamepad1.right_trigger > 0.4) action = 5;
-        else if (gamepad1.yWasPressed()) action = 6;
-        else if (gamepad1.aWasPressed()) action = 7;
-
-        switch (action) {
-            case 1:
-                stepIndex = (stepIndex + 1) % stepSizes.length;
-                break;
-            case 2:
-                curvelocity = Math.max(0, curvelocity - stepSizes[stepIndex]);
-                break;
-            case 3:
-                curvelocity += stepSizes[stepIndex];
-                break;
-            case 4:
-                leftIntake.setVelocity(1150);
-            case 5:
-                rightIntake.setVelocity(1150);
-            case 6:
-                if (turrethoodvalue < 1) turrethoodvalue += 0.1;
-                break;
-            case 7:
-                if (turrethoodvalue > 0) turrethoodvalue -= 0.1;
-                break;
+        if gamepad2.bWasPressed() {
+            rightFlyWheel.setPower(1);
+            leftFlyWheel.setPower(1);
         }
-
-        if (gamepad1.left_bumper) {
-            curvelocity = 6000;
-        }
-
-    turrethoodvalue = Math.max(0.0, Math.min(1.0, turrethoodvalue));
-        turrethood.setPosition(turrethoodvalue);
-
-        leftFlyWheel.setVelocity(curvelocity);
-        rightFlyWheel.setVelocity(curvelocity);
-
-        double leftFlyWheelCurrent = leftFlyWheel.getCurrent(CurrentUnit.AMPS);
-        double rightFlyWheelCurrent = rightFlyWheel.getCurrent(CurrentUnit.AMPS);
-        double totalCurrent = leftFlyWheelCurrent + rightFlyWheelCurrent;
-
-        telemetry.addData("Total Current (Amps)", totalCurrent);
-        telemetry.addData("Stepsize", "%.3f", stepSizes[stepIndex]);
-        telemetry.addData("hood", turrethoodvalue);
-        telemetry.addData("Target Velocity", curvelocity);
-        telemetry.addData("PIDF", "P=%.1f I=%.1f D=%.1f F=%.1f", P, I, D, F);
-        telemetry.addData("Left Wheel Velocity", "%.2f", leftFlyWheel.getVelocity());
-        telemetry.addData("Right Wheel Velocity", "%.2f", rightFlyWheel.getVelocity());
-        telemetry.update();
     }
 
     @Override
